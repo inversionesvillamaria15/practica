@@ -162,10 +162,16 @@
             FRAME_BUFFER_SIZE: 15,
             DETECTION_COOLDOWN: 1000,
             NEXT_TECHNIQUE_DELAY: 2000,
-            MIN_DETECTION_CONFIDENCE: 0.7,
-            VELOCITY_THRESHOLD: 0.12,
-            ANGULAR_VELOCITY_THRESHOLD: 0.8,
-            MIN_POSE_CONFIDENCE: 0.5
+            MIN_DETECTION_CONFIDENCE: 0.65,
+            VELOCITY_THRESHOLD: 0.10,
+            ANGULAR_VELOCITY_THRESHOLD: 0.6,
+            MIN_POSE_CONFIDENCE: 0.5,
+            // Umbrales específicos para patadas
+            KICK_HEIGHT_JODAN: 0.4,
+            KICK_HEIGHT_CHUDAN_MIN: 0.15,
+            KICK_HEIGHT_CHUDAN_MAX: 0.5,
+            LATERAL_MOVEMENT_MIN: 0.12,
+            DEBUG_MODE: true
         };
 
         const TECHNIQUES = [
@@ -189,7 +195,7 @@
                 this.camera = null;
                 
                 // Estado de la sesión
-                this.state = 'idle'; // idle, waiting, detecting, cooldown
+                this.state = 'idle';
                 this.currentTechnique = null;
                 this.startTime = null;
                 this.reactionTime = null;
@@ -307,8 +313,6 @@
             }
 
             drawPose(landmarks) {
-                const drawingUtils = window;
-                
                 // Conexiones del cuerpo
                 const connections = [
                     [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21],
@@ -335,7 +339,6 @@
                 // Dibujar landmarks
                 this.ctx.fillStyle = '#ff00ff';
                 landmarks.forEach((landmark, index) => {
-                    // Solo dibujar landmarks relevantes (11-32)
                     if (index >= 11) {
                         this.ctx.beginPath();
                         this.ctx.arc(
@@ -356,41 +359,44 @@
                     landmarks: landmarks
                 });
 
-                // Mantener solo los últimos N frames
                 if (this.frameBuffer.length > CONFIG.FRAME_BUFFER_SIZE) {
                     this.frameBuffer.shift();
                 }
             }
 
             // ========================================================================
-            // DETECCIÓN DE TÉCNICAS
+            // DETECCIÓN DE TÉCNICAS - VERSIÓN MEJORADA
             // ========================================================================
             
             detectTechnique() {
                 const now = performance.now();
                 
-                // Cooldown entre detecciones
                 if (now - this.lastDetectionTime < CONFIG.DETECTION_COOLDOWN) {
                     return;
                 }
 
                 let detected = false;
                 let confidence = 0;
+                let debugInfo = {};
 
-                // Ejecutar detector correspondiente
                 switch (this.currentTechnique.id) {
                     case 'gyaku_tsuki':
-                        [detected, confidence] = this.detectGyakuTsuki();
+                        [detected, confidence, debugInfo] = this.detectGyakuTsuki();
                         break;
                     case 'mawashi_jodan':
-                        [detected, confidence] = this.detectMawashiGeri(true);
+                        [detected, confidence, debugInfo] = this.detectMawashiGeriJodan();
                         break;
                     case 'mawashi_chudan':
-                        [detected, confidence] = this.detectMawashiGeri(false);
+                        [detected, confidence, debugInfo] = this.detectMawashiGeriChudan();
                         break;
                     case 'ura_mawashi':
-                        [detected, confidence] = this.detectUraMawashiGeri();
+                        [detected, confidence, debugInfo] = this.detectUraMawashiGeri();
                         break;
+                }
+
+                // Debug logging
+                if (CONFIG.DEBUG_MODE && this.state === 'waiting') {
+                    console.log(`[${this.currentTechnique.id}] Confidence: ${confidence.toFixed(3)}`, debugInfo);
                 }
 
                 if (detected && confidence > CONFIG.MIN_DETECTION_CONFIDENCE) {
@@ -402,117 +408,184 @@
                 const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
                 const previous = this.frameBuffer[0].landmarks;
 
-                // Identificar brazo trasero basado en posición de hombros
                 const leftShoulder = current[11];
                 const rightShoulder = current[12];
                 const leftWrist = current[15];
                 const rightWrist = current[16];
-                const leftHip = current[23];
-                const rightHip = current[24];
 
-                // Determinar stance (asumimos que el hombro más atrás es el trasero)
+                // Determinar brazo trasero por profundidad
                 const isLeftBack = leftShoulder.z > rightShoulder.z;
                 const backWrist = isLeftBack ? leftWrist : rightWrist;
                 const backWristPrev = isLeftBack ? previous[15] : previous[16];
 
-                // 1. Velocidad del puño trasero
+                // 1. Velocidad del puño
                 const wristVelocity = this.calculateVelocity(backWristPrev, backWrist);
                 
                 // 2. Extensión del brazo
-                const backElbow = isLeftBack ? current[13] : current[14];
                 const extension = this.calculateDistance(
                     isLeftBack ? leftShoulder : rightShoulder,
                     backWrist
                 );
 
-                // 3. Rotación de hombros
-                const shoulderRotation = Math.abs(
-                    Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x)
-                );
+                // 3. Proyección hacia adelante (coordenada Z)
+                const forwardMovement = Math.abs(backWrist.z - backWristPrev.z);
 
                 // Scoring
                 let confidence = 0;
-                if (wristVelocity > CONFIG.VELOCITY_THRESHOLD) confidence += 0.4;
-                if (extension > 0.3) confidence += 0.3;
-                if (shoulderRotation < 0.3) confidence += 0.3;
+                let debugInfo = { wristVelocity, extension, forwardMovement };
 
-                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+                if (wristVelocity > CONFIG.VELOCITY_THRESHOLD) confidence += 0.35;
+                if (extension > 0.25) confidence += 0.35;
+                if (forwardMovement > 0.05) confidence += 0.30;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
 
-            detectMawashiGeri(isJodan) {
+            detectMawashiGeriJodan() {
                 const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
                 const mid = this.frameBuffer[Math.floor(this.frameBuffer.length / 2)].landmarks;
+                const start = this.frameBuffer[0].landmarks;
 
-                // Landmarks de piernas
-                const leftHip = current[23];
-                const rightHip = current[24];
-                const leftKnee = current[25];
-                const rightKnee = current[26];
                 const leftAnkle = current[27];
                 const rightAnkle = current[28];
+                const leftKnee = current[25];
+                const rightKnee = current[26];
+                const leftHip = current[23];
+                const rightHip = current[24];
 
-                // Detectar qué pierna está pateando (la más alta)
+                // Determinar pierna pateando
                 const isLeftKick = leftAnkle.y < rightAnkle.y;
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
                 const kickKnee = isLeftKick ? leftKnee : rightKnee;
                 const kickHip = isLeftKick ? leftHip : rightHip;
                 const kickAnkleMid = isLeftKick ? mid[27] : mid[28];
+                const kickAnkleStart = isLeftKick ? start[27] : start[28];
 
-                // 1. Altura del pie
+                // Referencias de altura
                 const nose = current[0];
-                const shoulderAvg = (current[11].y + current[12].y) / 2;
-                const heightThreshold = isJodan ? nose.y : shoulderAvg;
-                const isHighEnough = kickAnkle.y < heightThreshold;
+                const hipAvg = (leftHip.y + rightHip.y) / 2;
+                const bodyHeight = hipAvg - nose.y;
 
-                // 2. Trayectoria circular (cambio en coordenada X)
-                const lateralMovement = Math.abs(kickAnkle.x - kickAnkleMid.x);
+                // 1. Altura ALTA (por encima de hombros, cercano a cabeza)
+                const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
+                const isHighEnough = kickHeight > CONFIG.KICK_HEIGHT_JODAN;
+
+                // 2. Movimiento lateral (arco circular)
+                const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
 
                 // 3. Elevación de rodilla
-                const kneeAngle = this.calculateAngle(kickHip, kickKnee, kickAnkle);
-                const kneeElevated = kickKnee.y < kickHip.y;
+                const kneeElevated = kickKnee.y < kickHip.y - 0.1;
 
-                // Scoring
+                // 4. Velocidad angular
+                const angularVel = lateralMovement / (this.frameBuffer.length / 30);
+
                 let confidence = 0;
-                if (isHighEnough) confidence += 0.4;
-                if (lateralMovement > 0.15) confidence += 0.3;
-                if (kneeElevated && kneeAngle > 60) confidence += 0.3;
+                let debugInfo = { kickHeight, lateralMovement, kneeElevated, angularVel, isHighEnough };
 
-                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+                if (isHighEnough) confidence += 0.40;
+                if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
+                if (kneeElevated) confidence += 0.30;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
+            }
+
+            detectMawashiGeriChudan() {
+                const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
+                const mid = this.frameBuffer[Math.floor(this.frameBuffer.length / 2)].landmarks;
+                const start = this.frameBuffer[0].landmarks;
+
+                const leftAnkle = current[27];
+                const rightAnkle = current[28];
+                const leftKnee = current[25];
+                const rightKnee = current[26];
+                const leftHip = current[23];
+                const rightHip = current[24];
+
+                // Determinar pierna pateando
+                const isLeftKick = leftAnkle.y < rightAnkle.y;
+                const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
+                const kickKnee = isLeftKick ? leftKnee : rightKnee;
+                const kickHip = isLeftKick ? leftHip : rightHip;
+                const kickAnkleMid = isLeftKick ? mid[27] : mid[28];
+                const kickAnkleStart = isLeftKick ? start[27] : start[28];
+
+                // Referencias de altura
+                const shoulder = (current[11].y + current[12].y) / 2;
+                const hipAvg = (leftHip.y + rightHip.y) / 2;
+                const bodyHeight = hipAvg - shoulder;
+
+                // 1. Altura MEDIA (entre cadera y hombros)
+                const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
+                const isCorrectHeight = kickHeight >= CONFIG.KICK_HEIGHT_CHUDAN_MIN && 
+                                       kickHeight <= CONFIG.KICK_HEIGHT_CHUDAN_MAX;
+
+                // 2. Movimiento lateral significativo
+                const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
+
+                // 3. Rodilla elevada pero NO tanto como Jodan
+                const kneeHeight = (kickHip.y - kickKnee.y) / bodyHeight;
+                const kneeElevated = kneeHeight > 0.15 && kneeHeight < 0.5;
+
+                // 4. Extensión de pierna en el pico
+                const legExtension = this.calculateDistance(kickKnee, kickAnkle);
+
+                // 5. Trayectoria circular
+                const circularPath = Math.abs(kickAnkleMid.x - kickAnkleStart.x) > 0.08;
+
+                let confidence = 0;
+                let debugInfo = { 
+                    kickHeight, 
+                    lateralMovement, 
+                    kneeHeight,
+                    kneeElevated, 
+                    legExtension,
+                    circularPath,
+                    isCorrectHeight
+                };
+
+                // Scoring más permisivo para Chudan
+                if (isCorrectHeight) confidence += 0.35;
+                if (lateralMovement > 0.10) confidence += 0.25;
+                if (kneeElevated) confidence += 0.20;
+                if (circularPath) confidence += 0.20;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
 
             detectUraMawashiGeri() {
                 const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
-                const previous = this.frameBuffer[0].landmarks;
+                const mid = this.frameBuffer[Math.floor(this.frameBuffer.length / 2)].landmarks;
+                const start = this.frameBuffer[0].landmarks;
 
-                // Detectar pierna pateando
                 const leftAnkle = current[27];
                 const rightAnkle = current[28];
-                const leftAnklePrev = previous[27];
-                const rightAnklePrev = previous[28];
+                const leftAnkleStart = start[27];
+                const rightAnkleStart = start[28];
 
+                // Determinar pierna
                 const isLeftKick = leftAnkle.y < rightAnkle.y;
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
-                const kickAnklePrev = isLeftKick ? leftAnklePrev : rightAnklePrev;
+                const kickAnkleStart = isLeftKick ? leftAnkleStart : rightAnkleStart;
 
-                // Trayectoria inversa: el pie debe moverse de afuera hacia adentro
-                // En Ura Mawashi, el arco es opuesto a Mawashi regular
-                const xMovement = kickAnkle.x - kickAnklePrev.x;
-                const isInwardTrajectory = isLeftKick ? xMovement > 0 : xMovement < 0;
+                // Trayectoria INVERSA: pie va de afuera hacia adentro
+                const xMovement = kickAnkle.x - kickAnkleStart.x;
+                const isInwardTrajectory = isLeftKick ? xMovement > 0.1 : xMovement < -0.1;
 
                 // Altura
-                const shoulderAvg = (current[11].y + current[12].y) / 2;
-                const isHighEnough = kickAnkle.y < shoulderAvg;
+                const shoulder = (current[11].y + current[12].y) / 2;
+                const isHighEnough = kickAnkle.y < shoulder;
 
-                // Velocidad angular
-                const angularVel = Math.abs(xMovement) / (this.frameBuffer.length / 30);
+                // Movimiento total
+                const totalMovement = Math.abs(xMovement);
 
-                // Scoring
                 let confidence = 0;
-                if (isInwardTrajectory) confidence += 0.4;
-                if (isHighEnough) confidence += 0.3;
-                if (angularVel > CONFIG.ANGULAR_VELOCITY_THRESHOLD) confidence += 0.3;
+                let debugInfo = { xMovement, isInwardTrajectory, isHighEnough, totalMovement };
 
-                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+                if (isInwardTrajectory) confidence += 0.40;
+                if (isHighEnough) confidence += 0.30;
+                if (totalMovement > 0.15) confidence += 0.30;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
 
             // ========================================================================
@@ -555,18 +628,14 @@
             }
 
             nextTechnique() {
-                // Seleccionar técnica aleatoria
                 const randomIndex = Math.floor(Math.random() * TECHNIQUES.length);
                 this.currentTechnique = TECHNIQUES[randomIndex];
                 
-                // Limpiar buffer
                 this.frameBuffer = [];
                 
-                // Actualizar UI
                 document.getElementById('technique').textContent = this.currentTechnique.name;
                 document.getElementById('reactionTime').textContent = '0.000s';
                 
-                // Anunciar técnica por voz
                 this.speak(this.currentTechnique.voice, () => {
                     this.state = 'waiting';
                     this.startTime = performance.now();
@@ -578,21 +647,17 @@
                 this.state = 'cooldown';
                 this.lastDetectionTime = performance.now();
                 
-                // Calcular tiempo de reacción
                 this.reactionTime = (this.lastDetectionTime - this.startTime) / 1000;
                 
-                // Actualizar UI
                 document.getElementById('reactionTime').textContent = this.reactionTime.toFixed(3) + 's';
                 document.getElementById('technique').classList.add('detected');
                 
-                // Actualizar estadísticas
                 this.stats.techniqueCount++;
                 this.stats.reactionTimes.push(this.reactionTime);
                 this.updateStats();
                 
                 this.updateStatus('¡Técnica detectada!');
                 
-                // Siguiente técnica después del delay
                 setTimeout(() => {
                     document.getElementById('technique').classList.remove('detected');
                     this.nextTechnique();
@@ -616,7 +681,7 @@
             }
 
             speak(text, callback) {
-                this.synth.cancel(); // Cancelar cualquier voz anterior
+                this.synth.cancel();
                 
                 this.utterance = new SpeechSynthesisUtterance(text);
                 this.utterance.lang = 'es-ES';
@@ -632,7 +697,7 @@
         }
 
         // ============================================================================
-        // INICIALIZACIÓN DE LA APLICACIÓN
+        // INICIALIZACIÓN
         // ============================================================================
         
         let trainer = null;
@@ -648,7 +713,6 @@
             trainer.startSession();
         });
 
-        // Prevenir errores de speech synthesis
         window.addEventListener('beforeunload', () => {
             if (trainer && trainer.synth) {
                 trainer.synth.cancel();
@@ -657,15 +721,3 @@
     </script>
 </body>
 </html>
-```
-
-## 4. DECISIONES ARQUITECTÓNICAS CLAVE
-
-### 4.1 Buffer Circular
-- Almacena últimos 15 frames (0.5s @ 30fps)
-- Permite detectar **movimientos**, no poses estáticas
-- Crítico para calcular velocidades y trayectorias
-
-### 4.2 Sistema de Estados
-```
-idle → waiting → detecting → cooldown → idle

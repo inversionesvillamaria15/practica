@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Shito-Ryu Kumite AI - Browser Edition</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<style>
+    :root { --red: #d32f2f; --dark: #121212; --green: #00e676; --gold: #ffd700; }
+    body { background: var(--dark); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; overflow: hidden; }
+    
+    /* PANTALLAS */
+    .screen { position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--dark); z-index: 10; transition: 0.3s; }
+    .hidden { display: none !important; }
+    
+    /* SETUP */
+    h1 { color: var(--red); text-transform: uppercase; letter-spacing: 2px; }
+    .config-box { background: #1e1e1e; padding: 20px; border-radius: 10px; width: 90%; max-width: 400px; }
+    .tech-option { display: flex; justify-content: space-between; margin: 10px 0; padding: 10px; background: #333; border-radius: 5px; cursor: pointer; }
+    .tech-option input { transform: scale(1.5); }
+    button.btn-start { background: var(--red); color: white; border: none; padding: 15px; width: 100%; font-size: 1.2rem; font-weight: bold; margin-top: 20px; cursor: pointer; border-radius: 5px; }
+    
+    /* DOJO (Entrenamiento) */
+    #dojo-screen { position: relative; }
+    canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); z-index: 1; }
+    #hud { position: absolute; z-index: 5; top: 20px; width: 100%; text-align: center; pointer-events: none; }
+    #cmd-text { font-size: 3rem; font-weight: 900; color: var(--gold); text-shadow: 0 0 10px rgba(0,0,0,0.8); }
+    #sub-text { font-size: 1.5rem; color: white; background: rgba(0,0,0,0.5); padding: 5px 20px; border-radius: 20px; display: inline-block; }
+    
+    /* FEEDBACK OVERLAY */
+    #feedback-overlay { position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%); z-index: 6; text-align: center; }
+    .stat-pill { background: rgba(0,0,0,0.8); color: var(--green); padding: 10px 20px; border-radius: 8px; font-family: monospace; font-size: 1.2rem; border: 1px solid var(--green); }
+
+    /* RESUMEN */
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; color: #ddd; }
+    th, td { border-bottom: 1px solid #444; padding: 10px; text-align: left; }
+    th { color: var(--gold); }
+</style>
+</head>
+<body>
+
+<div id="setup-screen" class="screen">
+    <h1>🥋 Configuración Kumite</h1>
+    <div class="config-box">
+        <label style="display:block; margin-bottom:10px;">Repeticiones: <input type="number" id="num-reps" value="10" style="width:50px;"></label>
+        <div id="tech-list">
+            </div>
+        <button class="btn-start" onclick="startSession()">¡HAJIME!</button>
+    </div>
+</div>
+
+<div id="dojo-screen" class="screen hidden">
+    <div id="hud">
+        <div id="cmd-text">PREPARADO...</div>
+        <div id="sub-text">Calibrando cámara</div>
+    </div>
+    <div id="feedback-overlay"></div>
+    <video id="input_video" style="display:none"></video>
+    <canvas id="output_canvas"></canvas>
+</div>
+
+<div id="summary-screen" class="screen hidden">
+    <h1>📊 Resultados Sesión</h1>
+    <div class="config-box">
+        <div id="summary-content"></div>
+        <button class="btn-start" onclick="location.reload()">Nuevo Entrenamiento</button>
+    </div>
+</div>
+
+<script>
+// --- CONFIGURACIÓN TÉCNICA ---
+const TECNICAS = [
+    { id: 'kizami', name: 'Kizami Tsuki', type: 'arm' },
+    { id: 'gyaku', name: 'Gyaku Tsuki', type: 'arm' },
+    { id: 'mae_geri', name: 'Mae Geri', type: 'leg' },
+    { id: 'mawashi', name: 'Mawashi Geri', type: 'leg' },
+    { id: 'yoko_geri', name: 'Yoko Geri', type: 'leg' }
+];
+
+// --- VARIABLES DE ESTADO ---
+let sessionConfig = { reps: 10, techs: [] };
+let sessionLog = [];
+let currentRep = 0;
+let state = "IDLE"; // IDLE, WAITING_CMD, REACTION, EXECUTING, COOLDOWN
+let targetTech = null;
+let t_start = 0;
+let t_reaction = 0;
+let synth = window.speechSynthesis;
+
+// --- INICIALIZACIÓN DE UI ---
+const techListDiv = document.getElementById('tech-list');
+TECNICAS.forEach(t => {
+    techListDiv.innerHTML += `
+        <label class="tech-option">
+            <span>${t.name}</span>
+            <input type="checkbox" value="${t.id}" checked>
+        </label>`;
+});
+
+// --- MOTOR DE VOZ (TTS) ---
+function speak(text) {
+    if (synth.speaking) synth.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'ja-JP'; // Intentar japonés, si no usará default
+    utter.rate = 1.1;
+    synth.speak(utter);
+}
+
+// --- FLUJO DE SESIÓN ---
+function startSession() {
+    // 1. Recoger config
+    const checks = document.querySelectorAll('#tech-list input:checked');
+    if (checks.length === 0) return alert("Selecciona al menos una técnica");
+    
+    sessionConfig.techs = Array.from(checks).map(c => TECNICAS.find(t => t.id === c.value));
+    sessionConfig.reps = parseInt(document.getElementById('num-reps').value);
+    
+    // 2. Cambiar pantalla
+    document.getElementById('setup-screen').classList.add('hidden');
+    document.getElementById('dojo-screen').classList.remove('hidden');
+    
+    // 3. Iniciar cámara y loop
+    initCamera();
+    setTimeout(nextRound, 3000); // 3s para acomodarse
+}
+
+function nextRound() {
+    if (currentRep >= sessionConfig.reps) return finishSession();
+    
+    currentRep++;
+    state = "WAITING_CMD";
+    
+    // UI Update
+    document.getElementById('cmd-text').innerText = "...";
+    document.getElementById('sub-text').innerText = `Ronda ${currentRep} / ${sessionConfig.reps}`;
+    document.getElementById('feedback-overlay').innerHTML = "";
+
+    // Tiempo aleatorio de espera (2 a 5 seg) - Simula combate
+    const delay = Math.floor(Math.random() * 3000) + 2000;
+    
+    setTimeout(() => {
+        // Seleccionar técnica random
+        targetTech = sessionConfig.techs[Math.floor(Math.random() * sessionConfig.techs.length)];
+        
+        // COMANDO
+        document.getElementById('cmd-text').innerText = targetTech.name;
+        document.getElementById('cmd-text').style.color = "#ffeb3b";
+        speak(targetTech.name);
+        
+        // INICIAR CRONO
+        t_start = performance.now();
+        state = "REACTION";
+        
+    }, delay);
+}
+
+function finishSession() {
+    document.getElementById('dojo-screen').classList.add('hidden');
+    document.getElementById('summary-screen').classList.remove('hidden');
+    
+    let html = `<table><tr><th>Técnica</th><th>Reacción</th><th>Resultado</th></tr>`;
+    sessionLog.forEach(log => {
+        html += `<tr>
+            <td>${log.tech}</td>
+            <td>${log.reaction}s</td>
+            <td style="color:${log.correct ? '#00e676' : '#ff5252'}">${log.correct ? '✔' : '✘'}</td>
+        </tr>`;
+    });
+    html += `</table>`;
+    
+    // Calcular promedio
+    const avgReact = (sessionLog.reduce((acc, curr) => acc + parseFloat(curr.reaction), 0) / sessionLog.length).toFixed(2);
+    html += `<h3 style="text-align:center; margin-top:20px;">Tiempo Medio Reacción: ${avgReact}s</h3>`;
+    
+    document.getElementById('summary-content').innerHTML = html;
+}
+
+// --- VISIÓN COMPUTADORA (CORE) ---
+function onResults(results) {
+    if (!results.poseLandmarks) return;
+    
+    // Dibujar
+    const canvas = document.getElementById('output_canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+    
+    // Si no estamos esperando golpe, salimos
+    if (state !== "REACTION" && state !== "EXECUTING") return;
+
+    const lm = results.poseLandmarks;
+    const detection = classifyMove(lm); // Tu función de detección
+    
+    // 1. Detectar inicio de movimiento (REACTION TIME)
+    if (state === "REACTION" && detection) {
+        // Si detecta CUALQUIER movimiento técnico fuerte
+        t_reaction = (performance.now() - t_start) / 1000;
+        state = "EXECUTING";
+    }
+
+    // 2. Validar Técnica (EXECUTION)
+    if (state === "EXECUTING" && detection) {
+        // ¿Coincide lo detectado con lo pedido?
+        // Simplificación: Chequea si pidió pierna y movió pierna, o brazo y movió brazo
+        // Para mayor precisión, comparar strings: detection.name vs targetTech.name
+        
+        const isCorrect = validateTech(targetTech, detection);
+        
+        if (isCorrect) {
+            // ÉXITO
+            sessionLog.push({
+                tech: targetTech.name,
+                reaction: t_reaction.toFixed(2),
+                correct: true
+            });
+            
+            // Feedback UI
+            document.getElementById('cmd-text').style.color = "#00e676"; // Verde
+            document.getElementById('feedback-overlay').innerHTML = `
+                <div class="stat-pill">
+                    ⏱ ${t_reaction.toFixed(2)}s <br>
+                    ${detection.name} ✔
+                </div>`;
+            
+            speak("Oss!"); // O "Bien"
+            state = "COOLDOWN";
+            setTimeout(nextRound, 2000);
+        }
+    }
+}
+
+// --- LÓGICA DE BIOMECÁNICA ---
+function getAngle(p1, p2, p3) {
+    const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
+    const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+    const dot = v1.x * v2.x + v1.y * v2.y;
+    const mag = Math.sqrt(v1.x * v1.x + v1.y * v1.y) * Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+    return Math.acos(Math.max(-1, Math.min(1, dot / mag))) * (180 / Math.PI);
+}
+
+function classifyMove(lm) {
+    // Umbrales
+    const EXTENSION_BRAZO = 155;
+    const EXTENSION_PIERNA = 145;
+    
+    // Puntos
+    const codoD = getAngle(lm[12], lm[14], lm[16]);
+    const codoI = getAngle(lm[11], lm[13], lm[15]);
+    const rodillaD = getAngle(lm[24], lm[26], lm[28]);
+    const rodillaI = getAngle(lm[23], lm[25], lm[27]);
+    
+    // Referencias
+    const centroX = (lm[23].x + lm[24].x) / 2;
+    const hHombro = (lm[11].y + lm[12].y) / 2;
+
+    // DETECCIÓN DE GOLPES
+    if (codoD > EXTENSION_BRAZO || codoI > EXTENSION_BRAZO) {
+        const mano = codoD > EXTENSION_BRAZO ? lm[16] : lm[15];
+        const lado = codoD > EXTENSION_BRAZO ? "D" : "I";
+        
+        // Lógica simple Gyaku vs Kizami (Asumiendo guardia zurda por defecto o detectando pies)
+        // Para simplificar: Si la mano cruza el centro mucho es Gyaku
+        const isCross = (lado === "D" && mano.x < centroX) || (lado === "I" && mano.x > centroX);
+        
+        return { 
+            type: 'arm', 
+            name: isCross ? 'Gyaku Tsuki' : 'Kizami Tsuki',
+            height: mano.y < hHombro ? 'Jodan' : 'Chudan'
+        };
+    }
+
+    if (rodillaD > EXTENSION_PIERNA || rodillaI > EXTENSION_PIERNA) {
+        const pie = rodillaD > EXTENSION_PIERNA ? lm[28] : lm[27];
+        const rodilla = rodillaD > EXTENSION_PIERNA ? lm[26] : lm[25];
+        
+        // Lógica Mawashi vs Mae
+        // Mawashi: La rodilla se abre lateralmente antes de extender
+        const apertura = Math.abs(rodilla.x - centroX);
+        const isCircular = apertura > 0.25; // Ajustar según prueba
+        
+        // Yoko geri suele tener el cuerpo inclinado, Mawashi el cuerpo más vertical pero rodilla abierta
+        // Por ahora simplificamos a Mae vs Mawashi
+        return {
+            type: 'leg',
+            name: isCircular ? 'Mawashi Geri' : 'Mae Geri',
+            height: pie.y < hHombro ? 'Jodan' : 'Chudan'
+        };
+    }
+    
+    return null;
+}
+
+function validateTech(target, detected) {
+    // Validación flexible
+    // Si pide 'Kizami Tsuki', acepta 'Tsuki' genérico si la detección es difícil
+    if (target.type !== detected.type) return false; // Confundió brazo con pierna
+    
+    // Si la detección es muy precisa, comparamos nombres
+    // Para empezar, validamos solo tipo (brazo/pierna) y nombre aproximado
+    if (target.name === detected.name) return true;
+    
+    return false;
+}
+
+// --- ARRANQUE ---
+function initCamera() {
+    const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`});
+    pose.setOptions({modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6});
+    pose.onResults(onResults);
+    
+    const camera = new Camera(document.getElementById('input_video'), {
+        onFrame: async () => { await pose.send({image: document.getElementById('input_video')}); },
+        width: 640, height: 480
+    });
+    camera.start();
+}
+</script>
+</body>
+</html>

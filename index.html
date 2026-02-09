@@ -54,12 +54,12 @@ canvas {
   text-align:center; z-index:5;
 }
 #cmd-text {
-  font-size:3.5rem; font-weight:900;
+  font-size:3.2rem; font-weight:900;
   color:var(--gold);
   text-shadow:2px 2px 12px black;
 }
 #sub-text {
-  font-size:1.4rem;
+  font-size:1.3rem;
   background:rgba(0,0,0,.6);
   padding:6px 25px;
   border-radius:30px;
@@ -104,13 +104,7 @@ canvas {
 
 <div id="feedback-overlay"></div>
 
-<video id="input_video"
-  autoplay
-  playsinline
-  muted
-  style="display:none">
-</video>
-
+<video id="input_video" autoplay playsinline muted style="display:none"></video>
 <canvas id="output_canvas"></canvas>
 </div>
 
@@ -128,7 +122,8 @@ const TECNICAS = [
 
 let pose, camera;
 let currentRep=0, targetTech=null;
-let state="IDLE", tStart=0;
+let state="IDLE";
+let tStart=0, execStart=0;
 
 /* ================= UI ================= */
 
@@ -146,7 +141,8 @@ TECNICAS.forEach(t=>{
 function speak(text){
  speechSynthesis.cancel();
  const u=new SpeechSynthesisUtterance(text);
- u.lang="ja-JP"; speechSynthesis.speak(u);
+ u.lang="ja-JP";
+ speechSynthesis.speak(u);
 }
 
 /* ================= SESIÓN ================= */
@@ -159,6 +155,7 @@ function startSession(){
 }
 
 function nextRound(){
+ execStart=0;
  currentRep++;
  const checked=[...document.querySelectorAll("input:checked")];
  targetTech=TECNICAS.find(t=>t.id===checked[Math.floor(Math.random()*checked.length)].value);
@@ -175,55 +172,85 @@ function angle(a,b,c){
  const cb={x:c.x-b.x,y:c.y-b.y};
  const dot=ab.x*cb.x+ab.y*cb.y;
  const mag=Math.hypot(ab.x,ab.y)*Math.hypot(cb.x,cb.y);
- return Math.acos(dot/mag)*180/Math.PI;
+ return Math.acos(Math.min(Math.max(dot/mag,-1),1))*180/Math.PI;
 }
 
 function classify(lm){
  const codoD=angle(lm[12],lm[14],lm[16]);
  const codoI=angle(lm[11],lm[13],lm[15]);
- if(codoD>160||codoI>160)
-   return {type:"arm"};
+ if(codoD>165 || codoI>165) return {type:"arm"};
+
  const rodD=angle(lm[24],lm[26],lm[28]);
  const rodI=angle(lm[23],lm[25],lm[27]);
- if(rodD>150||rodI>150)
-   return {type:"leg"};
+ if(rodD>155 || rodI>155) return {type:"leg"};
+
  return null;
+}
+
+/* ================= ESQUELETO ================= */
+
+const CONNECTIONS=[
+ [11,13],[13,15],[12,14],[14,16],
+ [11,12],[11,23],[12,24],[23,24],
+ [23,25],[25,27],[24,26],[26,28]
+];
+
+function drawSkeleton(ctx,lm){
+ ctx.strokeStyle="#00e676";
+ ctx.lineWidth=4;
+ CONNECTIONS.forEach(([a,b])=>{
+  ctx.beginPath();
+  ctx.moveTo(lm[a].x*ctx.canvas.width,lm[a].y*ctx.canvas.height);
+  ctx.lineTo(lm[b].x*ctx.canvas.width,lm[b].y*ctx.canvas.height);
+  ctx.stroke();
+ });
+ ctx.fillStyle="#ffd700";
+ lm.forEach(p=>{
+  ctx.beginPath();
+  ctx.arc(p.x*ctx.canvas.width,p.y*ctx.canvas.height,5,0,Math.PI*2);
+  ctx.fill();
+ });
 }
 
 /* ================= CAMERA ================= */
 
 function onResults(r){
  if(!r.poseLandmarks) return;
+
  const canvas=document.getElementById("output_canvas");
  const ctx=canvas.getContext("2d");
-
  canvas.width=r.image.width;
  canvas.height=r.image.height;
 
- ctx.clearRect(0,0,canvas.width,canvas.height);
  ctx.drawImage(r.image,0,0,canvas.width,canvas.height);
+ drawSkeleton(ctx,r.poseLandmarks);
 
  if(state==="WAITING"){
-   const d=classify(r.poseLandmarks);
-   if(d){
-     const reaction=((performance.now()-tStart)/1000).toFixed(2);
-     document.getElementById("feedback-overlay").innerHTML=
-      `<div class="stat-pill">REACCIÓN ${reaction}s</div>`;
-     state="COOLDOWN";
-     setTimeout(nextRound,2000);
-   }
+  const d=classify(r.poseLandmarks);
+  if(d && execStart===0){
+    execStart=performance.now();
+    const reaction=((execStart-tStart)/1000).toFixed(2);
+    const execution=((performance.now()-execStart)/1000).toFixed(2);
+    document.getElementById("feedback-overlay").innerHTML=
+     `<div class="stat-pill">
+       REACCIÓN: ${reaction}s<br>
+       EJECUCIÓN: ${execution}s
+     </div>`;
+    state="COOLDOWN";
+    setTimeout(nextRound,2000);
+  }
  }
 }
 
 function initCamera(){
  pose=new Pose({
-   locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
+  locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
  });
  pose.setOptions({
-   modelComplexity:1,
-   smoothLandmarks:true,
-   minDetectionConfidence:.5,
-   minTrackingConfidence:.5
+  modelComplexity:1,
+  smoothLandmarks:true,
+  minDetectionConfidence:.5,
+  minTrackingConfidence:.5
  });
  pose.onResults(onResults);
 
@@ -231,12 +258,13 @@ function initCamera(){
   document.getElementById("input_video"),{
    onFrame:async()=>await pose.send({image:input_video}),
    width:640, height:480
- });
+  }
+ );
  camera.start();
-
  document.getElementById("sub-text").innerText="CÁMARA ACTIVA";
 }
 </script>
 
 </body>
 </html>
+

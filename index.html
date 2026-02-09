@@ -1,270 +1,165 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<title>Dojo AI – Kumite Shito-Ryu</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!-- MediaPipe -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-
+<meta charset="UTF-8">
+<title>Dojo AI – Kumite Trainer</title>
 <style>
-:root {
-  --red:#d32f2f; --dark:#121212; --green:#00e676; --gold:#ffd700;
-}
 body {
-  margin:0; background:var(--dark); color:white;
-  font-family:Segoe UI,Tahoma,sans-serif; overflow:hidden;
-}
-.screen {
-  position:absolute; width:100%; height:100%;
-  display:flex; flex-direction:column;
-  align-items:center; justify-content:center;
-}
-.hidden { display:none; }
-
-.config-box {
-  background:#1e1e1e; padding:25px;
-  border-radius:15px; width:90%; max-width:450px;
+  margin: 0;
+  background: #0b0b0b;
+  color: #fff;
+  font-family: Arial, sans-serif;
+  text-align: center;
 }
 
-.tech-option {
-  display:flex; justify-content:space-between;
-  background:#2a2a2a; padding:12px;
-  border-radius:8px; margin:6px 0;
-}
-
-button {
-  width:100%; padding:15px; margin-top:20px;
-  font-size:1.1rem; font-weight:bold;
-  background:var(--red); color:white;
-  border:none; border-radius:8px;
+h1 {
+  margin: 10px;
 }
 
 canvas {
-  position:absolute; top:0; left:0;
-  width:100%; height:100%;
-  object-fit:cover;
-  transform:scaleX(-1);
+  width: 100%;
+  max-width: 900px;
 }
 
-#hud {
-  position:absolute; top:40px; width:100%;
-  text-align:center; z-index:5;
-}
-#cmd-text {
-  font-size:3.2rem; font-weight:900;
-  color:var(--gold);
-  text-shadow:2px 2px 12px black;
-}
-#sub-text {
-  font-size:1.3rem;
-  background:rgba(0,0,0,.6);
-  padding:6px 25px;
-  border-radius:30px;
-}
-
-.stat-pill {
-  background:rgba(0,0,0,.85);
-  padding:15px 30px;
-  border-radius:12px;
-  border:2px solid var(--green);
-  color:var(--green);
-  font-family:monospace;
-}
-
-#feedback-overlay {
-  position:absolute; bottom:80px;
-  left:50%; transform:translateX(-50%);
-  z-index:6;
+#info {
+  font-size: 20px;
+  margin: 10px;
 }
 </style>
 </head>
 
 <body>
+<h1>🥋 Dojo AI – Kumite</h1>
+<div id="info">Preparando…</div>
 
-<!-- SETUP -->
-<div id="setup-screen" class="screen">
-<h1 style="color:var(--red)">🥋 KUMITE AI</h1>
-<div class="config-box">
-<label>Repeticiones:
-<input id="num-reps" type="number" value="10" min="1"></label>
-<div id="tech-list"></div>
-<button onclick="startSession()">HAJIME</button>
-</div>
-</div>
-
-<!-- DOJO -->
-<div id="dojo-screen" class="screen hidden">
-<div id="hud">
-<div id="cmd-text">LISTO</div>
-<div id="sub-text">Inicializando cámara…</div>
-</div>
-
-<div id="feedback-overlay"></div>
-
-<video id="input_video" autoplay playsinline muted style="display:none"></video>
+<video id="input_video" style="display:none"></video>
 <canvas id="output_canvas"></canvas>
-</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-/* ================= CONFIG ================= */
+const video = document.getElementById("input_video");
+const canvas = document.getElementById("output_canvas");
+const ctx = canvas.getContext("2d");
+const info = document.getElementById("info");
 
-const TECNICAS = [
- {id:'kizami', name:'Kizami Tsuki', type:'arm'},
- {id:'gyaku', name:'Gyaku Tsuki', type:'arm'},
- {id:'mae', name:'Mae Geri', type:'leg'},
- {id:'mawashi', name:'Mawashi Geri', type:'leg'},
- {id:'ura', name:'Ura Mawashi Geri', type:'leg'},
- {id:'yoko', name:'Yoko Geri', type:'leg'}
+let tecnicaActual = null;
+let esperando = false;
+let inicioTiempo = 0;
+
+// ===================== VOZ =====================
+function hablar(texto) {
+  const msg = new SpeechSynthesisUtterance(texto);
+  msg.lang = "es-ES";
+  speechSynthesis.speak(msg);
+}
+
+// ===================== TECNICAS =====================
+const tecnicas = [
+  "Gyaku Tsuki",
+  "Mawashi Geri Jodan",
+  "Mawashi Geri Chudan",
+  "Ura Mawashi Geri"
 ];
 
-let pose, camera;
-let currentRep=0, targetTech=null;
-let state="IDLE";
-let tStart=0, execStart=0;
+function nuevaTecnica() {
+  tecnicaActual = tecnicas[Math.floor(Math.random() * tecnicas.length)];
+  info.textContent = tecnicaActual;
+  hablar(tecnicaActual);
+  esperando = true;
+  inicioTiempo = performance.now();
+}
 
-/* ================= UI ================= */
+// ===================== DETECCIÓN =====================
+let lastRightWristX = null;
+let lastRightAnkleY = null;
+let lastRightAnkleX = null;
 
-const techList=document.getElementById("tech-list");
-TECNICAS.forEach(t=>{
- techList.innerHTML+=`
- <label class="tech-option">
-  <span>${t.name}</span>
-  <input type="checkbox" checked value="${t.id}">
- </label>`;
+function detectarTecnica(lm) {
+  const rw = lm[16]; // muñeca derecha
+  const ra = lm[28]; // tobillo derecho
+
+  if (!rw || !ra) return false;
+
+  // Gyaku Tsuki
+  if (tecnicaActual === "Gyaku Tsuki") {
+    if (lastRightWristX !== null && rw.x - lastRightWristX > 0.04) return true;
+    lastRightWristX = rw.x;
+  }
+
+  // Mawashi Geri Jodan
+  if (tecnicaActual === "Mawashi Geri Jodan") {
+    if (lastRightAnkleY !== null && ra.y < 0.35) return true;
+    lastRightAnkleY = ra.y;
+  }
+
+  // Mawashi Geri Chudan
+  if (tecnicaActual === "Mawashi Geri Chudan") {
+    if (lastRightAnkleY !== null && ra.y < 0.55) return true;
+    lastRightAnkleY = ra.y;
+  }
+
+  // Ura Mawashi Geri
+  if (tecnicaActual === "Ura Mawashi Geri") {
+    if (lastRightAnkleX !== null && Math.abs(ra.x - lastRightAnkleX) > 0.06) return true;
+    lastRightAnkleX = ra.x;
+  }
+
+  return false;
+}
+
+// ===================== POSE =====================
+const pose = new Pose({
+  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
 });
 
-/* ================= VOZ ================= */
+pose.setOptions({
+  modelComplexity: 1,
+  smoothLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
 
-function speak(text){
- speechSynthesis.cancel();
- const u=new SpeechSynthesisUtterance(text);
- u.lang="ja-JP";
- speechSynthesis.speak(u);
-}
+pose.onResults(results => {
+  canvas.width = results.image.width;
+  canvas.height = results.image.height;
 
-/* ================= SESIÓN ================= */
+  ctx.drawImage(results.image, 0, 0);
 
-function startSession(){
- document.getElementById("setup-screen").classList.add("hidden");
- document.getElementById("dojo-screen").classList.remove("hidden");
- initCamera();
- setTimeout(nextRound,3000);
-}
+  if (results.poseLandmarks) {
+    drawSkeleton(results.poseLandmarks);
 
-function nextRound(){
- execStart=0;
- currentRep++;
- const checked=[...document.querySelectorAll("input:checked")];
- targetTech=TECNICAS.find(t=>t.id===checked[Math.floor(Math.random()*checked.length)].value);
- document.getElementById("cmd-text").innerText=targetTech.name;
- speak(targetTech.name);
- tStart=performance.now();
- state="WAITING";
-}
-
-/* ================= BIOMECÁNICA ================= */
-
-function angle(a,b,c){
- const ab={x:a.x-b.x,y:a.y-b.y};
- const cb={x:c.x-b.x,y:c.y-b.y};
- const dot=ab.x*cb.x+ab.y*cb.y;
- const mag=Math.hypot(ab.x,ab.y)*Math.hypot(cb.x,cb.y);
- return Math.acos(Math.min(Math.max(dot/mag,-1),1))*180/Math.PI;
-}
-
-function classify(lm){
- const codoD=angle(lm[12],lm[14],lm[16]);
- const codoI=angle(lm[11],lm[13],lm[15]);
- if(codoD>165 || codoI>165) return {type:"arm"};
-
- const rodD=angle(lm[24],lm[26],lm[28]);
- const rodI=angle(lm[23],lm[25],lm[27]);
- if(rodD>155 || rodI>155) return {type:"leg"};
-
- return null;
-}
-
-/* ================= ESQUELETO ================= */
-
-const CONNECTIONS=[
- [11,13],[13,15],[12,14],[14,16],
- [11,12],[11,23],[12,24],[23,24],
- [23,25],[25,27],[24,26],[26,28]
-];
-
-function drawSkeleton(ctx,lm){
- ctx.strokeStyle="#00e676";
- ctx.lineWidth=4;
- CONNECTIONS.forEach(([a,b])=>{
-  ctx.beginPath();
-  ctx.moveTo(lm[a].x*ctx.canvas.width,lm[a].y*ctx.canvas.height);
-  ctx.lineTo(lm[b].x*ctx.canvas.width,lm[b].y*ctx.canvas.height);
-  ctx.stroke();
- });
- ctx.fillStyle="#ffd700";
- lm.forEach(p=>{
-  ctx.beginPath();
-  ctx.arc(p.x*ctx.canvas.width,p.y*ctx.canvas.height,5,0,Math.PI*2);
-  ctx.fill();
- });
-}
-
-/* ================= CAMERA ================= */
-
-function onResults(r){
- if(!r.poseLandmarks) return;
-
- const canvas=document.getElementById("output_canvas");
- const ctx=canvas.getContext("2d");
- canvas.width=r.image.width;
- canvas.height=r.image.height;
-
- ctx.drawImage(r.image,0,0,canvas.width,canvas.height);
- drawSkeleton(ctx,r.poseLandmarks);
-
- if(state==="WAITING"){
-  const d=classify(r.poseLandmarks);
-  if(d && execStart===0){
-    execStart=performance.now();
-    const reaction=((execStart-tStart)/1000).toFixed(2);
-    const execution=((performance.now()-execStart)/1000).toFixed(2);
-    document.getElementById("feedback-overlay").innerHTML=
-     `<div class="stat-pill">
-       REACCIÓN: ${reaction}s<br>
-       EJECUCIÓN: ${execution}s
-     </div>`;
-    state="COOLDOWN";
-    setTimeout(nextRound,2000);
+    if (esperando && detectarTecnica(results.poseLandmarks)) {
+      const tiempo = ((performance.now() - inicioTiempo) / 1000).toFixed(2);
+      hablar(`Bien. Tiempo ${tiempo} segundos`);
+      info.textContent = `✔ ${tecnicaActual} – ${tiempo}s`;
+      esperando = false;
+      setTimeout(nuevaTecnica, 3000);
+    }
   }
- }
+});
+
+// ===================== DIBUJO =====================
+function drawSkeleton(lm) {
+  ctx.fillStyle = "red";
+  lm.forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
+    ctx.fill();
+  });
 }
 
-function initCamera(){
- pose=new Pose({
-  locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`
- });
- pose.setOptions({
-  modelComplexity:1,
-  smoothLandmarks:true,
-  minDetectionConfidence:.5,
-  minTrackingConfidence:.5
- });
- pose.onResults(onResults);
+// ===================== CAMARA =====================
+const camera = new Camera(video, {
+  onFrame: async () => await pose.send({ image: video }),
+  width: 900,
+  height: 600
+});
 
- camera=new Camera(
-  document.getElementById("input_video"),{
-   onFrame:async()=>await pose.send({image:input_video}),
-   width:640, height:480
-  }
- );
- camera.start();
- document.getElementById("sub-text").innerText="CÁMARA ACTIVA";
-}
+camera.start();
+setTimeout(nuevaTecnica, 4000);
 </script>
 
 </body>
 </html>
-

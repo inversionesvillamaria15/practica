@@ -1,165 +1,671 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<title>Dojo AI – Kumite Trainer</title>
-<style>
-body {
-  margin: 0;
-  background: #0b0b0b;
-  color: #fff;
-  font-family: Arial, sans-serif;
-  text-align: center;
-}
-
-h1 {
-  margin: 10px;
-}
-
-canvas {
-  width: 100%;
-  max-width: 900px;
-}
-
-#info {
-  font-size: 20px;
-  margin: 10px;
-}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kumite Trainer - Shito-Ryu</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow: hidden;
+        }
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #videoElement {
+            position: absolute;
+            display: none;
+        }
+        #canvasElement {
+            max-width: 100%;
+            max-height: 100%;
+            border: 2px solid #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+        #overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #00ff41;
+            min-width: 300px;
+        }
+        #technique {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00ff41;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        #reactionTime {
+            font-size: 48px;
+            color: #ffaa00;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        #status {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #888;
+        }
+        #stats {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #00ff41;
+            font-size: 12px;
+        }
+        .stat-row {
+            margin: 5px 0;
+        }
+        .label {
+            color: #888;
+            display: inline-block;
+            width: 120px;
+        }
+        .value {
+            color: #00ff41;
+            font-weight: bold;
+        }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: #00ff41;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+        #startButton:hover {
+            background: #00cc33;
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+        #startButton:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+        .detected {
+            animation: pulse 0.3s ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+    </style>
 </head>
-
 <body>
-<h1>🥋 Dojo AI – Kumite</h1>
-<div id="info">Preparando…</div>
+    <div id="container">
+        <button id="startButton">INICIAR ENTRENAMIENTO</button>
+        <video id="videoElement" autoplay playsinline></video>
+        <canvas id="canvasElement"></canvas>
+        
+        <div id="overlay">
+            <div id="technique">LISTO</div>
+            <div id="reactionTime">0.000s</div>
+            <div id="status">Presiona INICIAR para comenzar</div>
+        </div>
 
-<video id="input_video" style="display:none"></video>
-<canvas id="output_canvas"></canvas>
+        <div id="stats">
+            <div class="stat-row">
+                <span class="label">FPS:</span>
+                <span class="value" id="fps">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Técnicas:</span>
+                <span class="value" id="techniqueCount">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Tiempo Promedio:</span>
+                <span class="value" id="avgTime">0.000s</span>
+            </div>
+            <div class="stat-row">
+                <span class="label">Mejor Tiempo:</span>
+                <span class="value" id="bestTime">-</span>
+            </div>
+        </div>
+    </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script>
+        // ============================================================================
+        // CONFIGURACIÓN Y CONSTANTES
+        // ============================================================================
+        
+        const CONFIG = {
+            FRAME_BUFFER_SIZE: 15,
+            DETECTION_COOLDOWN: 1000,
+            NEXT_TECHNIQUE_DELAY: 2000,
+            MIN_DETECTION_CONFIDENCE: 0.7,
+            VELOCITY_THRESHOLD: 0.12,
+            ANGULAR_VELOCITY_THRESHOLD: 0.8,
+            MIN_POSE_CONFIDENCE: 0.5
+        };
 
-<script>
-const video = document.getElementById("input_video");
-const canvas = document.getElementById("output_canvas");
-const ctx = canvas.getContext("2d");
-const info = document.getElementById("info");
+        const TECHNIQUES = [
+            { id: 'gyaku_tsuki', name: 'Gyaku Tsuki', voice: 'Gyaku Tsuki' },
+            { id: 'mawashi_jodan', name: 'Mawashi Geri Jodan', voice: 'Mawashi Geri Jodan' },
+            { id: 'mawashi_chudan', name: 'Mawashi Geri Chudan', voice: 'Mawashi Geri Chudan' },
+            { id: 'ura_mawashi', name: 'Ura Mawashi Geri', voice: 'Ura Mawashi Geri' }
+        ];
 
-let tecnicaActual = null;
-let esperando = false;
-let inicioTiempo = 0;
+        // ============================================================================
+        // CLASE PRINCIPAL: KUMITE TRAINER
+        // ============================================================================
+        
+        class KumiteTrainer {
+            constructor() {
+                this.video = document.getElementById('videoElement');
+                this.canvas = document.getElementById('canvasElement');
+                this.ctx = this.canvas.getContext('2d');
+                
+                this.pose = null;
+                this.camera = null;
+                
+                // Estado de la sesión
+                this.state = 'idle'; // idle, waiting, detecting, cooldown
+                this.currentTechnique = null;
+                this.startTime = null;
+                this.reactionTime = null;
+                
+                // Buffer de frames para análisis temporal
+                this.frameBuffer = [];
+                this.lastDetectionTime = 0;
+                
+                // Estadísticas
+                this.stats = {
+                    techniqueCount: 0,
+                    reactionTimes: [],
+                    fps: 0,
+                    lastFrameTime: performance.now()
+                };
+                
+                // Speech Synthesis
+                this.synth = window.speechSynthesis;
+                this.utterance = null;
+                
+                this.initializePose();
+            }
 
-// ===================== VOZ =====================
-function hablar(texto) {
-  const msg = new SpeechSynthesisUtterance(texto);
-  msg.lang = "es-ES";
-  speechSynthesis.speak(msg);
-}
+            // ========================================================================
+            // INICIALIZACIÓN
+            // ========================================================================
+            
+            initializePose() {
+                this.pose = new Pose({
+                    locateFile: (file) => {
+                        return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                    }
+                });
 
-// ===================== TECNICAS =====================
-const tecnicas = [
-  "Gyaku Tsuki",
-  "Mawashi Geri Jodan",
-  "Mawashi Geri Chudan",
-  "Ura Mawashi Geri"
-];
+                this.pose.setOptions({
+                    modelComplexity: 1,
+                    smoothLandmarks: true,
+                    enableSegmentation: false,
+                    smoothSegmentation: false,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                });
 
-function nuevaTecnica() {
-  tecnicaActual = tecnicas[Math.floor(Math.random() * tecnicas.length)];
-  info.textContent = tecnicaActual;
-  hablar(tecnicaActual);
-  esperando = true;
-  inicioTiempo = performance.now();
-}
+                this.pose.onResults((results) => this.onPoseResults(results));
+            }
 
-// ===================== DETECCIÓN =====================
-let lastRightWristX = null;
-let lastRightAnkleY = null;
-let lastRightAnkleX = null;
+            async startCamera() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        }
+                    });
 
-function detectarTecnica(lm) {
-  const rw = lm[16]; // muñeca derecha
-  const ra = lm[28]; // tobillo derecho
+                    this.video.srcObject = stream;
+                    
+                    await new Promise((resolve) => {
+                        this.video.onloadedmetadata = () => {
+                            this.canvas.width = this.video.videoWidth;
+                            this.canvas.height = this.video.videoHeight;
+                            resolve();
+                        };
+                    });
 
-  if (!rw || !ra) return false;
+                    this.camera = new Camera(this.video, {
+                        onFrame: async () => {
+                            await this.pose.send({ image: this.video });
+                        },
+                        width: 1280,
+                        height: 720
+                    });
 
-  // Gyaku Tsuki
-  if (tecnicaActual === "Gyaku Tsuki") {
-    if (lastRightWristX !== null && rw.x - lastRightWristX > 0.04) return true;
-    lastRightWristX = rw.x;
-  }
+                    await this.camera.start();
+                    this.updateStatus('Cámara iniciada. Preparado para entrenar.');
+                    
+                } catch (error) {
+                    console.error('Error al iniciar cámara:', error);
+                    this.updateStatus('Error: No se pudo acceder a la cámara');
+                }
+            }
 
-  // Mawashi Geri Jodan
-  if (tecnicaActual === "Mawashi Geri Jodan") {
-    if (lastRightAnkleY !== null && ra.y < 0.35) return true;
-    lastRightAnkleY = ra.y;
-  }
+            // ========================================================================
+            // PROCESAMIENTO DE POSE
+            // ========================================================================
+            
+            onPoseResults(results) {
+                // Actualizar FPS
+                const now = performance.now();
+                const delta = now - this.stats.lastFrameTime;
+                this.stats.fps = Math.round(1000 / delta);
+                this.stats.lastFrameTime = now;
+                document.getElementById('fps').textContent = this.stats.fps;
 
-  // Mawashi Geri Chudan
-  if (tecnicaActual === "Mawashi Geri Chudan") {
-    if (lastRightAnkleY !== null && ra.y < 0.55) return true;
-    lastRightAnkleY = ra.y;
-  }
+                // Limpiar canvas
+                this.ctx.save();
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.drawImage(results.image, 0, 0, this.canvas.width, this.canvas.height);
 
-  // Ura Mawashi Geri
-  if (tecnicaActual === "Ura Mawashi Geri") {
-    if (lastRightAnkleX !== null && Math.abs(ra.x - lastRightAnkleX) > 0.06) return true;
-    lastRightAnkleX = ra.x;
-  }
+                // Dibujar landmarks si están disponibles
+                if (results.poseLandmarks) {
+                    this.drawPose(results.poseLandmarks);
+                    
+                    // Agregar frame al buffer
+                    this.addFrameToBuffer(results.poseLandmarks);
+                    
+                    // Procesar detección si estamos esperando
+                    if (this.state === 'waiting' && this.frameBuffer.length >= CONFIG.FRAME_BUFFER_SIZE) {
+                        this.detectTechnique();
+                    }
+                }
 
-  return false;
-}
+                this.ctx.restore();
+            }
 
-// ===================== POSE =====================
-const pose = new Pose({
-  locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-});
+            drawPose(landmarks) {
+                const drawingUtils = window;
+                
+                // Conexiones del cuerpo
+                const connections = [
+                    [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21],
+                    [12, 14], [14, 16], [16, 18], [16, 20], [16, 22],
+                    [11, 23], [12, 24], [23, 24],
+                    [23, 25], [25, 27], [27, 29], [27, 31],
+                    [24, 26], [26, 28], [28, 30], [28, 32]
+                ];
 
-pose.setOptions({
-  modelComplexity: 1,
-  smoothLandmarks: true,
-  minDetectionConfidence: 0.5,
-  minTrackingConfidence: 0.5
-});
+                // Dibujar conexiones
+                this.ctx.strokeStyle = '#00ff41';
+                this.ctx.lineWidth = 2;
+                connections.forEach(([start, end]) => {
+                    const startPoint = landmarks[start];
+                    const endPoint = landmarks[end];
+                    if (startPoint && endPoint) {
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(startPoint.x * this.canvas.width, startPoint.y * this.canvas.height);
+                        this.ctx.lineTo(endPoint.x * this.canvas.width, endPoint.y * this.canvas.height);
+                        this.ctx.stroke();
+                    }
+                });
 
-pose.onResults(results => {
-  canvas.width = results.image.width;
-  canvas.height = results.image.height;
+                // Dibujar landmarks
+                this.ctx.fillStyle = '#ff00ff';
+                landmarks.forEach((landmark, index) => {
+                    // Solo dibujar landmarks relevantes (11-32)
+                    if (index >= 11) {
+                        this.ctx.beginPath();
+                        this.ctx.arc(
+                            landmark.x * this.canvas.width,
+                            landmark.y * this.canvas.height,
+                            5,
+                            0,
+                            2 * Math.PI
+                        );
+                        this.ctx.fill();
+                    }
+                });
+            }
 
-  ctx.drawImage(results.image, 0, 0);
+            addFrameToBuffer(landmarks) {
+                this.frameBuffer.push({
+                    timestamp: performance.now(),
+                    landmarks: landmarks
+                });
 
-  if (results.poseLandmarks) {
-    drawSkeleton(results.poseLandmarks);
+                // Mantener solo los últimos N frames
+                if (this.frameBuffer.length > CONFIG.FRAME_BUFFER_SIZE) {
+                    this.frameBuffer.shift();
+                }
+            }
 
-    if (esperando && detectarTecnica(results.poseLandmarks)) {
-      const tiempo = ((performance.now() - inicioTiempo) / 1000).toFixed(2);
-      hablar(`Bien. Tiempo ${tiempo} segundos`);
-      info.textContent = `✔ ${tecnicaActual} – ${tiempo}s`;
-      esperando = false;
-      setTimeout(nuevaTecnica, 3000);
-    }
-  }
-});
+            // ========================================================================
+            // DETECCIÓN DE TÉCNICAS
+            // ========================================================================
+            
+            detectTechnique() {
+                const now = performance.now();
+                
+                // Cooldown entre detecciones
+                if (now - this.lastDetectionTime < CONFIG.DETECTION_COOLDOWN) {
+                    return;
+                }
 
-// ===================== DIBUJO =====================
-function drawSkeleton(lm) {
-  ctx.fillStyle = "red";
-  lm.forEach(p => {
-    ctx.beginPath();
-    ctx.arc(p.x * canvas.width, p.y * canvas.height, 5, 0, Math.PI * 2);
-    ctx.fill();
-  });
-}
+                let detected = false;
+                let confidence = 0;
 
-// ===================== CAMARA =====================
-const camera = new Camera(video, {
-  onFrame: async () => await pose.send({ image: video }),
-  width: 900,
-  height: 600
-});
+                // Ejecutar detector correspondiente
+                switch (this.currentTechnique.id) {
+                    case 'gyaku_tsuki':
+                        [detected, confidence] = this.detectGyakuTsuki();
+                        break;
+                    case 'mawashi_jodan':
+                        [detected, confidence] = this.detectMawashiGeri(true);
+                        break;
+                    case 'mawashi_chudan':
+                        [detected, confidence] = this.detectMawashiGeri(false);
+                        break;
+                    case 'ura_mawashi':
+                        [detected, confidence] = this.detectUraMawashiGeri();
+                        break;
+                }
 
-camera.start();
-setTimeout(nuevaTecnica, 4000);
-</script>
+                if (detected && confidence > CONFIG.MIN_DETECTION_CONFIDENCE) {
+                    this.onTechniqueDetected();
+                }
+            }
 
+            detectGyakuTsuki() {
+                const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
+                const previous = this.frameBuffer[0].landmarks;
+
+                // Identificar brazo trasero basado en posición de hombros
+                const leftShoulder = current[11];
+                const rightShoulder = current[12];
+                const leftWrist = current[15];
+                const rightWrist = current[16];
+                const leftHip = current[23];
+                const rightHip = current[24];
+
+                // Determinar stance (asumimos que el hombro más atrás es el trasero)
+                const isLeftBack = leftShoulder.z > rightShoulder.z;
+                const backWrist = isLeftBack ? leftWrist : rightWrist;
+                const backWristPrev = isLeftBack ? previous[15] : previous[16];
+
+                // 1. Velocidad del puño trasero
+                const wristVelocity = this.calculateVelocity(backWristPrev, backWrist);
+                
+                // 2. Extensión del brazo
+                const backElbow = isLeftBack ? current[13] : current[14];
+                const extension = this.calculateDistance(
+                    isLeftBack ? leftShoulder : rightShoulder,
+                    backWrist
+                );
+
+                // 3. Rotación de hombros
+                const shoulderRotation = Math.abs(
+                    Math.atan2(rightShoulder.y - leftShoulder.y, rightShoulder.x - leftShoulder.x)
+                );
+
+                // Scoring
+                let confidence = 0;
+                if (wristVelocity > CONFIG.VELOCITY_THRESHOLD) confidence += 0.4;
+                if (extension > 0.3) confidence += 0.3;
+                if (shoulderRotation < 0.3) confidence += 0.3;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+            }
+
+            detectMawashiGeri(isJodan) {
+                const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
+                const mid = this.frameBuffer[Math.floor(this.frameBuffer.length / 2)].landmarks;
+
+                // Landmarks de piernas
+                const leftHip = current[23];
+                const rightHip = current[24];
+                const leftKnee = current[25];
+                const rightKnee = current[26];
+                const leftAnkle = current[27];
+                const rightAnkle = current[28];
+
+                // Detectar qué pierna está pateando (la más alta)
+                const isLeftKick = leftAnkle.y < rightAnkle.y;
+                const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
+                const kickKnee = isLeftKick ? leftKnee : rightKnee;
+                const kickHip = isLeftKick ? leftHip : rightHip;
+                const kickAnkleMid = isLeftKick ? mid[27] : mid[28];
+
+                // 1. Altura del pie
+                const nose = current[0];
+                const shoulderAvg = (current[11].y + current[12].y) / 2;
+                const heightThreshold = isJodan ? nose.y : shoulderAvg;
+                const isHighEnough = kickAnkle.y < heightThreshold;
+
+                // 2. Trayectoria circular (cambio en coordenada X)
+                const lateralMovement = Math.abs(kickAnkle.x - kickAnkleMid.x);
+
+                // 3. Elevación de rodilla
+                const kneeAngle = this.calculateAngle(kickHip, kickKnee, kickAnkle);
+                const kneeElevated = kickKnee.y < kickHip.y;
+
+                // Scoring
+                let confidence = 0;
+                if (isHighEnough) confidence += 0.4;
+                if (lateralMovement > 0.15) confidence += 0.3;
+                if (kneeElevated && kneeAngle > 60) confidence += 0.3;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+            }
+
+            detectUraMawashiGeri() {
+                const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
+                const previous = this.frameBuffer[0].landmarks;
+
+                // Detectar pierna pateando
+                const leftAnkle = current[27];
+                const rightAnkle = current[28];
+                const leftAnklePrev = previous[27];
+                const rightAnklePrev = previous[28];
+
+                const isLeftKick = leftAnkle.y < rightAnkle.y;
+                const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
+                const kickAnklePrev = isLeftKick ? leftAnklePrev : rightAnklePrev;
+
+                // Trayectoria inversa: el pie debe moverse de afuera hacia adentro
+                // En Ura Mawashi, el arco es opuesto a Mawashi regular
+                const xMovement = kickAnkle.x - kickAnklePrev.x;
+                const isInwardTrajectory = isLeftKick ? xMovement > 0 : xMovement < 0;
+
+                // Altura
+                const shoulderAvg = (current[11].y + current[12].y) / 2;
+                const isHighEnough = kickAnkle.y < shoulderAvg;
+
+                // Velocidad angular
+                const angularVel = Math.abs(xMovement) / (this.frameBuffer.length / 30);
+
+                // Scoring
+                let confidence = 0;
+                if (isInwardTrajectory) confidence += 0.4;
+                if (isHighEnough) confidence += 0.3;
+                if (angularVel > CONFIG.ANGULAR_VELOCITY_THRESHOLD) confidence += 0.3;
+
+                return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence];
+            }
+
+            // ========================================================================
+            // UTILIDADES GEOMÉTRICAS
+            // ========================================================================
+            
+            calculateVelocity(prev, curr) {
+                const dx = curr.x - prev.x;
+                const dy = curr.y - prev.y;
+                const dz = curr.z - prev.z;
+                return Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+
+            calculateDistance(p1, p2) {
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const dz = p2.z - p1.z;
+                return Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }
+
+            calculateAngle(p1, p2, p3) {
+                const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
+                const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+                const dot = v1.x * v2.x + v1.y * v2.y;
+                const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
+                const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
+                return Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+            }
+
+            // ========================================================================
+            // GESTIÓN DE SESIÓN
+            // ========================================================================
+            
+            startSession() {
+                this.state = 'idle';
+                this.stats.techniqueCount = 0;
+                this.stats.reactionTimes = [];
+                this.updateStats();
+                this.nextTechnique();
+            }
+
+            nextTechnique() {
+                // Seleccionar técnica aleatoria
+                const randomIndex = Math.floor(Math.random() * TECHNIQUES.length);
+                this.currentTechnique = TECHNIQUES[randomIndex];
+                
+                // Limpiar buffer
+                this.frameBuffer = [];
+                
+                // Actualizar UI
+                document.getElementById('technique').textContent = this.currentTechnique.name;
+                document.getElementById('reactionTime').textContent = '0.000s';
+                
+                // Anunciar técnica por voz
+                this.speak(this.currentTechnique.voice, () => {
+                    this.state = 'waiting';
+                    this.startTime = performance.now();
+                    this.updateStatus('¡Ejecuta la técnica!');
+                });
+            }
+
+            onTechniqueDetected() {
+                this.state = 'cooldown';
+                this.lastDetectionTime = performance.now();
+                
+                // Calcular tiempo de reacción
+                this.reactionTime = (this.lastDetectionTime - this.startTime) / 1000;
+                
+                // Actualizar UI
+                document.getElementById('reactionTime').textContent = this.reactionTime.toFixed(3) + 's';
+                document.getElementById('technique').classList.add('detected');
+                
+                // Actualizar estadísticas
+                this.stats.techniqueCount++;
+                this.stats.reactionTimes.push(this.reactionTime);
+                this.updateStats();
+                
+                this.updateStatus('¡Técnica detectada!');
+                
+                // Siguiente técnica después del delay
+                setTimeout(() => {
+                    document.getElementById('technique').classList.remove('detected');
+                    this.nextTechnique();
+                }, CONFIG.NEXT_TECHNIQUE_DELAY);
+            }
+
+            updateStats() {
+                document.getElementById('techniqueCount').textContent = this.stats.techniqueCount;
+                
+                if (this.stats.reactionTimes.length > 0) {
+                    const avg = this.stats.reactionTimes.reduce((a, b) => a + b, 0) / this.stats.reactionTimes.length;
+                    const best = Math.min(...this.stats.reactionTimes);
+                    
+                    document.getElementById('avgTime').textContent = avg.toFixed(3) + 's';
+                    document.getElementById('bestTime').textContent = best.toFixed(3) + 's';
+                }
+            }
+
+            updateStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
+
+            speak(text, callback) {
+                this.synth.cancel(); // Cancelar cualquier voz anterior
+                
+                this.utterance = new SpeechSynthesisUtterance(text);
+                this.utterance.lang = 'es-ES';
+                this.utterance.rate = 1.0;
+                this.utterance.pitch = 1.0;
+                
+                if (callback) {
+                    this.utterance.onend = callback;
+                }
+                
+                this.synth.speak(this.utterance);
+            }
+        }
+
+        // ============================================================================
+        // INICIALIZACIÓN DE LA APLICACIÓN
+        // ============================================================================
+        
+        let trainer = null;
+
+        document.getElementById('startButton').addEventListener('click', async () => {
+            document.getElementById('startButton').style.display = 'none';
+            
+            if (!trainer) {
+                trainer = new KumiteTrainer();
+                await trainer.startCamera();
+            }
+            
+            trainer.startSession();
+        });
+
+        // Prevenir errores de speech synthesis
+        window.addEventListener('beforeunload', () => {
+            if (trainer && trainer.synth) {
+                trainer.synth.cancel();
+            }
+        });
+    </script>
 </body>
 </html>
+```
+
+## 4. DECISIONES ARQUITECTÓNICAS CLAVE
+
+### 4.1 Buffer Circular
+- Almacena últimos 15 frames (0.5s @ 30fps)
+- Permite detectar **movimientos**, no poses estáticas
+- Crítico para calcular velocidades y trayectorias
+
+### 4.2 Sistema de Estados
+```
+idle → waiting → detecting → cooldown → idle

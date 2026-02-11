@@ -20,6 +20,247 @@
             color: #fff;
             overflow: hidden;
         }
+
+        /* ========== DASHBOARD ========== */
+        #dashboard {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+
+        #dashboard.hidden {
+            display: none;
+        }
+
+        .dashboard-container {
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ff41;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
+        }
+
+        .dashboard-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: #00ff41;
+            text-align: center;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .dashboard-subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #00ff41;
+            margin-bottom: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .techniques-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .technique-checkbox {
+            display: flex;
+            align-items: center;
+            background: rgba(0, 255, 65, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .technique-checkbox:hover {
+            background: rgba(0, 255, 65, 0.2);
+            border-color: #00ff41;
+        }
+
+        .technique-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 15px;
+            cursor: pointer;
+            accent-color: #00ff41;
+        }
+
+        .technique-label {
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 15px;
+        }
+
+        .mode-option {
+            flex: 1;
+            background: rgba(0, 255, 65, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid rgba(0, 255, 65, 0.3);
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .mode-option:hover {
+            background: rgba(0, 255, 65, 0.2);
+            border-color: #00ff41;
+        }
+
+        .mode-option.selected {
+            background: rgba(0, 255, 65, 0.3);
+            border-color: #00ff41;
+            box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
+        }
+
+        .mode-option input[type="radio"] {
+            display: none;
+        }
+
+        .mode-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #00ff41;
+        }
+
+        .mode-description {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .tabata-config {
+            display: none;
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 65, 0.2);
+        }
+
+        .tabata-config.active {
+            display: block;
+        }
+
+        .config-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .config-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .config-label {
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        .config-input {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .config-input input[type="number"] {
+            width: 70px;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 255, 65, 0.3);
+            border-radius: 5px;
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        .config-input input[type="number"]:focus {
+            outline: none;
+            border-color: #00ff41;
+        }
+
+        .config-unit {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .start-training-btn {
+            width: 100%;
+            padding: 18px;
+            font-size: 20px;
+            font-weight: bold;
+            background: #00ff41;
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+            margin-top: 30px;
+        }
+
+        .start-training-btn:hover {
+            background: #00cc33;
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+        }
+
+        .start-training-btn:active {
+            transform: scale(0.98);
+        }
+
+        .start-training-btn:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .error-message {
+            color: #ff4444;
+            font-size: 14px;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* ========== TRAINING VIEW ========== */
         #container {
             position: relative;
             width: 100vw;
@@ -28,16 +269,19 @@
             justify-content: center;
             align-items: center;
         }
+
         #videoElement {
             position: absolute;
             display: none;
         }
+
         #canvasElement {
             max-width: 100%;
             max-height: 100%;
             border: 2px solid #00ff41;
             box-shadow: 0 0 20px rgba(0, 255, 65, 0.3);
         }
+
         #overlay {
             position: absolute;
             top: 20px;
@@ -48,6 +292,7 @@
             border: 1px solid #00ff41;
             min-width: 300px;
         }
+
         #technique {
             font-size: 32px;
             font-weight: bold;
@@ -56,17 +301,69 @@
             text-transform: uppercase;
             letter-spacing: 2px;
         }
+
         #reactionTime {
             font-size: 48px;
             color: #ffaa00;
             font-weight: bold;
             font-family: 'Courier New', monospace;
         }
+
         #status {
             margin-top: 10px;
             font-size: 14px;
             color: #888;
         }
+
+        /* Tabata Timer */
+        #tabataTimer {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            padding: 60px;
+            border-radius: 20px;
+            border: 3px solid #00ff41;
+            text-align: center;
+            z-index: 100;
+        }
+
+        #tabataTimer.active {
+            display: block;
+        }
+
+        #tabataPhase {
+            font-size: 36px;
+            color: #00ff41;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        #tabataPhase.rest {
+            color: #ffaa00;
+        }
+
+        #tabataCountdown {
+            font-size: 120px;
+            font-weight: bold;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            line-height: 1;
+        }
+
+        #tabataCountdown.rest {
+            color: #ffaa00;
+        }
+
+        #tabataRound {
+            font-size: 24px;
+            color: #888;
+            margin-top: 20px;
+        }
+
         #stats {
             position: absolute;
             bottom: 20px;
@@ -77,60 +374,436 @@
             border: 1px solid #00ff41;
             font-size: 12px;
         }
+
         .stat-row {
             margin: 5px 0;
         }
+
         .label {
             color: #888;
             display: inline-block;
             width: 120px;
         }
+
         .value {
             color: #00ff41;
             font-weight: bold;
         }
-        #startButton {
+
+        #backButton {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 20px 40px;
-            font-size: 24px;
-            background: #00ff41;
-            color: #000;
-            border: none;
-            border-radius: 10px;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background: rgba(255, 68, 68, 0.8);
+            color: #fff;
+            border: 1px solid #ff4444;
+            border-radius: 8px;
             cursor: pointer;
+            font-size: 14px;
             font-weight: bold;
             transition: all 0.3s;
-            z-index: 1000;
+            text-transform: uppercase;
+            z-index: 50;
         }
-        #startButton:hover {
-            background: #00cc33;
-            transform: translate(-50%, -50%) scale(1.05);
+
+        #backButton:hover {
+            background: rgba(255, 68, 68, 1);
+            box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
         }
-        #startButton:active {
-            transform: translate(-50%, -50%) scale(0.95);
-        }
+
         .detected {
             animation: pulse 0.3s ease-in-out;
         }
+
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.1); }
         }
+
+        /* ========== STATISTICS SCREEN ========== */
+        #statisticsScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        #statisticsScreen.active {
+            display: flex;
+        }
+
+        .stats-container {
+            background: rgba(26, 26, 46, 0.95);
+            border: 2px solid #00ff41;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 800px;
+            width: 100%;
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stats-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .stats-title {
+            font-size: 42px;
+            font-weight: bold;
+            color: #00ff41;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 10px;
+        }
+
+        .stats-subtitle {
+            font-size: 16px;
+            color: #888;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(0, 255, 65, 0.1);
+            border: 2px solid rgba(0, 255, 65, 0.3);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover {
+            background: rgba(0, 255, 65, 0.2);
+            border-color: #00ff41;
+            transform: translateY(-5px);
+        }
+
+        .stat-card-label {
+            font-size: 14px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card-value {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stat-card-unit {
+            font-size: 18px;
+            color: #888;
+            margin-left: 5px;
+        }
+
+        .stats-section {
+            margin-bottom: 30px;
+        }
+
+        .stats-section-title {
+            font-size: 24px;
+            color: #00ff41;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border-bottom: 2px solid rgba(0, 255, 65, 0.3);
+            padding-bottom: 10px;
+        }
+
+        .technique-stats-grid {
+            display: grid;
+            gap: 15px;
+        }
+
+        .technique-stat-row {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 65, 0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .technique-stat-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00ff41;
+        }
+
+        .technique-stat-details {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .technique-stat-item {
+            text-align: center;
+        }
+
+        .technique-stat-item-label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 5px;
+        }
+
+        .technique-stat-item-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+        }
+
+        .reaction-times-list {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 255, 65, 0.2);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .reaction-time-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0, 255, 65, 0.1);
+        }
+
+        .reaction-time-item:last-child {
+            border-bottom: none;
+        }
+
+        .reaction-time-technique {
+            color: #aaa;
+        }
+
+        .reaction-time-value {
+            color: #00ff41;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stats-actions {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        .stats-btn {
+            flex: 1;
+            padding: 18px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: all 0.3s;
+        }
+
+        .stats-btn-primary {
+            background: #00ff41;
+            color: #000;
+        }
+
+        .stats-btn-primary:hover {
+            background: #00cc33;
+            transform: scale(1.02);
+            box-shadow: 0 0 30px rgba(0, 255, 65, 0.5);
+        }
+
+        .stats-btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .stats-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Scrollbar styling */
+        .reaction-times-list::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .reaction-times-list::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        .reaction-times-list::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 65, 0.5);
+            border-radius: 10px;
+        }
+
+        .reaction-times-list::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 255, 65, 0.7);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .dashboard-container, .stats-container {
+                padding: 20px;
+            }
+
+            .dashboard-title, .stats-title {
+                font-size: 28px;
+            }
+
+            .mode-selector {
+                flex-direction: column;
+            }
+
+            #tabataCountdown {
+                font-size: 80px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .technique-stat-details {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .stats-actions {
+                flex-direction: column;
+            }
+
+            .stat-card-value {
+                font-size: 36px;
+            }
+        }
     </style>
 </head>
 <body>
+    <!-- ========== DASHBOARD ========== -->
+    <div id="dashboard">
+        <div class="dashboard-container">
+            <h1 class="dashboard-title">Kumite Trainer</h1>
+            <p class="dashboard-subtitle">Shito-Ryu • Personaliza tu entrenamiento</p>
+
+            <div class="section">
+                <div class="section-title">📋 Técnicas</div>
+                <div class="techniques-grid">
+                    <label class="technique-checkbox">
+                        <input type="checkbox" id="tech-gyaku-tsuki" value="gyaku_tsuki" checked>
+                        <span class="technique-label">Gyaku Tsuki</span>
+                    </label>
+                    <label class="technique-checkbox">
+                        <input type="checkbox" id="tech-mawashi-jodan" value="mawashi_jodan" checked>
+                        <span class="technique-label">Mawashi Geri Jodan</span>
+                    </label>
+                    <label class="technique-checkbox">
+                        <input type="checkbox" id="tech-mawashi-chudan" value="mawashi_chudan" checked>
+                        <span class="technique-label">Mawashi Geri Chudan</span>
+                    </label>
+                    <label class="technique-checkbox">
+                        <input type="checkbox" id="tech-ura-mawashi" value="ura_mawashi" checked>
+                        <span class="technique-label">Ura Mawashi Geri</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-title">⚡ Modo de Entrenamiento</div>
+                <div class="mode-selector">
+                    <label class="mode-option selected" id="mode-normal-label">
+                        <input type="radio" name="mode" value="normal" id="mode-normal" checked>
+                        <div class="mode-title">Normal</div>
+                        <div class="mode-description">Técnicas aleatorias continuas</div>
+                    </label>
+                    <label class="mode-option" id="mode-tabata-label">
+                        <input type="radio" name="mode" value="tabata" id="mode-tabata">
+                        <div class="mode-title">Tabata</div>
+                        <div class="mode-description">Intervalos de alta intensidad</div>
+                    </label>
+                </div>
+
+                <div class="tabata-config" id="tabata-config">
+                    <div class="config-row">
+                        <span class="config-label">Trabajo:</span>
+                        <div class="config-input">
+                            <input type="number" id="tabata-work" value="20" min="5" max="60">
+                            <span class="config-unit">segundos</span>
+                        </div>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">Descanso:</span>
+                        <div class="config-input">
+                            <input type="number" id="tabata-rest" value="10" min="5" max="60">
+                            <span class="config-unit">segundos</span>
+                        </div>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">Rondas:</span>
+                        <div class="config-input">
+                            <input type="number" id="tabata-rounds" value="8" min="1" max="20">
+                            <span class="config-unit">ciclos</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button class="start-training-btn" id="startTrainingBtn">
+                Iniciar Entrenamiento
+            </button>
+            <div class="error-message" id="error-message">
+                Selecciona al menos una técnica
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== TRAINING VIEW ========== -->
     <div id="container">
-        <button id="startButton">INICIAR ENTRENAMIENTO</button>
+        <button id="backButton">◀ Finalizar</button>
         <video id="videoElement" autoplay playsinline></video>
         <canvas id="canvasElement"></canvas>
         
         <div id="overlay">
             <div id="technique">LISTO</div>
             <div id="reactionTime">0.000s</div>
-            <div id="status">Presiona INICIAR para comenzar</div>
+            <div id="status">Iniciando...</div>
+        </div>
+
+        <div id="tabataTimer">
+            <div id="tabataPhase">PREPARACIÓN</div>
+            <div id="tabataCountdown">3</div>
+            <div id="tabataRound">Ronda 1 de 8</div>
         </div>
 
         <div id="stats">
@@ -153,6 +826,70 @@
         </div>
     </div>
 
+    <!-- ========== STATISTICS SCREEN ========== -->
+    <div id="statisticsScreen">
+        <div class="stats-container">
+            <div class="stats-header">
+                <div class="stats-title">🥋 Resumen de Sesión</div>
+                <div class="stats-subtitle">Análisis completo de tu entrenamiento</div>
+            </div>
+
+            <!-- Estadísticas Generales -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-card-label">Técnicas Totales</div>
+                    <div class="stat-card-value" id="final-total-techniques">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Tiempo Promedio</div>
+                    <div>
+                        <span class="stat-card-value" id="final-avg-time">0.000</span>
+                        <span class="stat-card-unit">s</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Mejor Tiempo</div>
+                    <div>
+                        <span class="stat-card-value" id="final-best-time">0.000</span>
+                        <span class="stat-card-unit">s</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-label">Duración</div>
+                    <div>
+                        <span class="stat-card-value" id="final-duration">0:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Estadísticas por Técnica -->
+            <div class="stats-section">
+                <div class="stats-section-title">📊 Desglose por Técnica</div>
+                <div class="technique-stats-grid" id="technique-breakdown">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Lista de Tiempos de Reacción -->
+            <div class="stats-section">
+                <div class="stats-section-title">⏱️ Tiempos de Reacción</div>
+                <div class="reaction-times-list" id="reaction-times-list">
+                    <!-- Se llenará dinámicamente -->
+                </div>
+            </div>
+
+            <!-- Acciones -->
+            <div class="stats-actions">
+                <button class="stats-btn stats-btn-primary" id="newSessionBtn">
+                    Nueva Sesión
+                </button>
+                <button class="stats-btn stats-btn-secondary" id="backToDashboardBtn">
+                    Volver al Menú
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ============================================================================
         // CONFIGURACIÓN Y CONSTANTES
@@ -166,7 +903,6 @@
             VELOCITY_THRESHOLD: 0.10,
             ANGULAR_VELOCITY_THRESHOLD: 0.6,
             MIN_POSE_CONFIDENCE: 0.5,
-            // Umbrales específicos para patadas
             KICK_HEIGHT_JODAN: 0.4,
             KICK_HEIGHT_CHUDAN_MIN: 0.15,
             KICK_HEIGHT_CHUDAN_MAX: 0.5,
@@ -174,7 +910,7 @@
             DEBUG_MODE: true
         };
 
-        const TECHNIQUES = [
+        const ALL_TECHNIQUES = [
             { id: 'gyaku_tsuki', name: 'Gyaku Tsuki', voice: 'Gyaku Tsuki' },
             { id: 'mawashi_jodan', name: 'Mawashi Geri Jodan', voice: 'Mawashi Geri Jodan' },
             { id: 'mawashi_chudan', name: 'Mawashi Geri Chudan', voice: 'Mawashi Geri Chudan' },
@@ -182,11 +918,87 @@
         ];
 
         // ============================================================================
+        // DASHBOARD LOGIC
+        // ============================================================================
+        
+        let selectedTechniques = [];
+        let trainingMode = 'normal';
+        let tabataConfig = {
+            work: 20,
+            rest: 10,
+            rounds: 8
+        };
+
+        document.getElementById('mode-normal').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('mode-normal-label').classList.add('selected');
+                document.getElementById('mode-tabata-label').classList.remove('selected');
+                document.getElementById('tabata-config').classList.remove('active');
+                trainingMode = 'normal';
+            }
+        });
+
+        document.getElementById('mode-tabata').addEventListener('change', function() {
+            if (this.checked) {
+                document.getElementById('mode-tabata-label').classList.add('selected');
+                document.getElementById('mode-normal-label').classList.remove('selected');
+                document.getElementById('tabata-config').classList.add('active');
+                trainingMode = 'tabata';
+            }
+        });
+
+        document.getElementById('startTrainingBtn').addEventListener('click', async () => {
+            selectedTechniques = [];
+            document.querySelectorAll('.technique-checkbox input[type="checkbox"]:checked').forEach(checkbox => {
+                const technique = ALL_TECHNIQUES.find(t => t.id === checkbox.value);
+                if (technique) selectedTechniques.push(technique);
+            });
+
+            if (selectedTechniques.length === 0) {
+                document.getElementById('error-message').classList.add('show');
+                return;
+            }
+
+            if (trainingMode === 'tabata') {
+                tabataConfig.work = parseInt(document.getElementById('tabata-work').value);
+                tabataConfig.rest = parseInt(document.getElementById('tabata-rest').value);
+                tabataConfig.rounds = parseInt(document.getElementById('tabata-rounds').value);
+            }
+
+            document.getElementById('dashboard').classList.add('hidden');
+            
+            if (!trainer) {
+                trainer = new KumiteTrainer(selectedTechniques, trainingMode, tabataConfig);
+                await trainer.startCamera();
+            } else {
+                trainer.updateConfig(selectedTechniques, trainingMode, tabataConfig);
+            }
+            
+            trainer.startSession();
+        });
+
+        document.getElementById('backButton').addEventListener('click', () => {
+            if (trainer) {
+                trainer.finishSession();
+            }
+        });
+
+        document.getElementById('newSessionBtn').addEventListener('click', async () => {
+            document.getElementById('statisticsScreen').classList.remove('active');
+            document.getElementById('dashboard').classList.remove('hidden');
+        });
+
+        document.getElementById('backToDashboardBtn').addEventListener('click', () => {
+            document.getElementById('statisticsScreen').classList.remove('active');
+            document.getElementById('dashboard').classList.remove('hidden');
+        });
+
+        // ============================================================================
         // CLASE PRINCIPAL: KUMITE TRAINER
         // ============================================================================
         
         class KumiteTrainer {
-            constructor() {
+            constructor(techniques, mode, tabataConfig) {
                 this.video = document.getElementById('videoElement');
                 this.canvas = document.getElementById('canvasElement');
                 this.ctx = this.canvas.getContext('2d');
@@ -194,35 +1006,48 @@
                 this.pose = null;
                 this.camera = null;
                 
-                // Estado de la sesión
+                this.availableTechniques = techniques;
+                this.trainingMode = mode;
+                this.tabataConfig = tabataConfig;
+                
                 this.state = 'idle';
                 this.currentTechnique = null;
                 this.startTime = null;
                 this.reactionTime = null;
+                this.sessionStartTime = null;
                 
-                // Buffer de frames para análisis temporal
+                this.tabataState = {
+                    currentRound: 0,
+                    isWorkPhase: false,
+                    isRestPhase: false,
+                    countdown: 0,
+                    intervalId: null
+                };
+                
                 this.frameBuffer = [];
                 this.lastDetectionTime = 0;
                 
-                // Estadísticas
                 this.stats = {
                     techniqueCount: 0,
                     reactionTimes: [],
+                    techniqueBreakdown: {},
+                    detailedReactionTimes: [], // {technique, time, timestamp}
                     fps: 0,
                     lastFrameTime: performance.now()
                 };
                 
-                // Speech Synthesis
                 this.synth = window.speechSynthesis;
                 this.utterance = null;
                 
                 this.initializePose();
             }
 
-            // ========================================================================
-            // INICIALIZACIÓN
-            // ========================================================================
-            
+            updateConfig(techniques, mode, tabataConfig) {
+                this.availableTechniques = techniques;
+                this.trainingMode = mode;
+                this.tabataConfig = tabataConfig;
+            }
+
             initializePose() {
                 this.pose = new Pose({
                     locateFile: (file) => {
@@ -279,31 +1104,21 @@
                 }
             }
 
-            // ========================================================================
-            // PROCESAMIENTO DE POSE
-            // ========================================================================
-            
             onPoseResults(results) {
-                // Actualizar FPS
                 const now = performance.now();
                 const delta = now - this.stats.lastFrameTime;
                 this.stats.fps = Math.round(1000 / delta);
                 this.stats.lastFrameTime = now;
                 document.getElementById('fps').textContent = this.stats.fps;
 
-                // Limpiar canvas
                 this.ctx.save();
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
                 this.ctx.drawImage(results.image, 0, 0, this.canvas.width, this.canvas.height);
 
-                // Dibujar landmarks si están disponibles
                 if (results.poseLandmarks) {
                     this.drawPose(results.poseLandmarks);
-                    
-                    // Agregar frame al buffer
                     this.addFrameToBuffer(results.poseLandmarks);
                     
-                    // Procesar detección si estamos esperando
                     if (this.state === 'waiting' && this.frameBuffer.length >= CONFIG.FRAME_BUFFER_SIZE) {
                         this.detectTechnique();
                     }
@@ -313,7 +1128,6 @@
             }
 
             drawPose(landmarks) {
-                // Conexiones del cuerpo
                 const connections = [
                     [11, 12], [11, 13], [13, 15], [15, 17], [15, 19], [15, 21],
                     [12, 14], [14, 16], [16, 18], [16, 20], [16, 22],
@@ -322,7 +1136,6 @@
                     [24, 26], [26, 28], [28, 30], [28, 32]
                 ];
 
-                // Dibujar conexiones
                 this.ctx.strokeStyle = '#00ff41';
                 this.ctx.lineWidth = 2;
                 connections.forEach(([start, end]) => {
@@ -336,7 +1149,6 @@
                     }
                 });
 
-                // Dibujar landmarks
                 this.ctx.fillStyle = '#ff00ff';
                 landmarks.forEach((landmark, index) => {
                     if (index >= 11) {
@@ -364,10 +1176,6 @@
                 }
             }
 
-            // ========================================================================
-            // DETECCIÓN DE TÉCNICAS - VERSIÓN MEJORADA
-            // ========================================================================
-            
             detectTechnique() {
                 const now = performance.now();
                 
@@ -394,7 +1202,6 @@
                         break;
                 }
 
-                // Debug logging
                 if (CONFIG.DEBUG_MODE && this.state === 'waiting') {
                     console.log(`[${this.currentTechnique.id}] Confidence: ${confidence.toFixed(3)}`, debugInfo);
                 }
@@ -413,24 +1220,17 @@
                 const leftWrist = current[15];
                 const rightWrist = current[16];
 
-                // Determinar brazo trasero por profundidad
                 const isLeftBack = leftShoulder.z > rightShoulder.z;
                 const backWrist = isLeftBack ? leftWrist : rightWrist;
                 const backWristPrev = isLeftBack ? previous[15] : previous[16];
 
-                // 1. Velocidad del puño
                 const wristVelocity = this.calculateVelocity(backWristPrev, backWrist);
-                
-                // 2. Extensión del brazo
                 const extension = this.calculateDistance(
                     isLeftBack ? leftShoulder : rightShoulder,
                     backWrist
                 );
-
-                // 3. Proyección hacia adelante (coordenada Z)
                 const forwardMovement = Math.abs(backWrist.z - backWristPrev.z);
 
-                // Scoring
                 let confidence = 0;
                 let debugInfo = { wristVelocity, extension, forwardMovement };
 
@@ -453,34 +1253,23 @@
                 const leftHip = current[23];
                 const rightHip = current[24];
 
-                // Determinar pierna pateando
                 const isLeftKick = leftAnkle.y < rightAnkle.y;
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
                 const kickKnee = isLeftKick ? leftKnee : rightKnee;
                 const kickHip = isLeftKick ? leftHip : rightHip;
-                const kickAnkleMid = isLeftKick ? mid[27] : mid[28];
                 const kickAnkleStart = isLeftKick ? start[27] : start[28];
 
-                // Referencias de altura
                 const nose = current[0];
                 const hipAvg = (leftHip.y + rightHip.y) / 2;
                 const bodyHeight = hipAvg - nose.y;
 
-                // 1. Altura ALTA (por encima de hombros, cercano a cabeza)
                 const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
                 const isHighEnough = kickHeight > CONFIG.KICK_HEIGHT_JODAN;
-
-                // 2. Movimiento lateral (arco circular)
                 const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
-
-                // 3. Elevación de rodilla
                 const kneeElevated = kickKnee.y < kickHip.y - 0.1;
 
-                // 4. Velocidad angular
-                const angularVel = lateralMovement / (this.frameBuffer.length / 30);
-
                 let confidence = 0;
-                let debugInfo = { kickHeight, lateralMovement, kneeElevated, angularVel, isHighEnough };
+                let debugInfo = { kickHeight, lateralMovement, kneeElevated, isHighEnough };
 
                 if (isHighEnough) confidence += 0.40;
                 if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
@@ -501,7 +1290,6 @@
                 const leftHip = current[23];
                 const rightHip = current[24];
 
-                // Determinar pierna pateando
                 const isLeftKick = leftAnkle.y < rightAnkle.y;
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
                 const kickKnee = isLeftKick ? leftKnee : rightKnee;
@@ -509,41 +1297,25 @@
                 const kickAnkleMid = isLeftKick ? mid[27] : mid[28];
                 const kickAnkleStart = isLeftKick ? start[27] : start[28];
 
-                // Referencias de altura
                 const shoulder = (current[11].y + current[12].y) / 2;
                 const hipAvg = (leftHip.y + rightHip.y) / 2;
                 const bodyHeight = hipAvg - shoulder;
 
-                // 1. Altura MEDIA (entre cadera y hombros)
                 const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
                 const isCorrectHeight = kickHeight >= CONFIG.KICK_HEIGHT_CHUDAN_MIN && 
                                        kickHeight <= CONFIG.KICK_HEIGHT_CHUDAN_MAX;
-
-                // 2. Movimiento lateral significativo
                 const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
-
-                // 3. Rodilla elevada pero NO tanto como Jodan
                 const kneeHeight = (kickHip.y - kickKnee.y) / bodyHeight;
                 const kneeElevated = kneeHeight > 0.15 && kneeHeight < 0.5;
-
-                // 4. Extensión de pierna en el pico
                 const legExtension = this.calculateDistance(kickKnee, kickAnkle);
-
-                // 5. Trayectoria circular
                 const circularPath = Math.abs(kickAnkleMid.x - kickAnkleStart.x) > 0.08;
 
                 let confidence = 0;
                 let debugInfo = { 
-                    kickHeight, 
-                    lateralMovement, 
-                    kneeHeight,
-                    kneeElevated, 
-                    legExtension,
-                    circularPath,
-                    isCorrectHeight
+                    kickHeight, lateralMovement, kneeHeight, kneeElevated, 
+                    legExtension, circularPath, isCorrectHeight
                 };
 
-                // Scoring más permisivo para Chudan
                 if (isCorrectHeight) confidence += 0.35;
                 if (lateralMovement > 0.10) confidence += 0.25;
                 if (kneeElevated) confidence += 0.20;
@@ -554,7 +1326,6 @@
 
             detectUraMawashiGeri() {
                 const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
-                const mid = this.frameBuffer[Math.floor(this.frameBuffer.length / 2)].landmarks;
                 const start = this.frameBuffer[0].landmarks;
 
                 const leftAnkle = current[27];
@@ -562,20 +1333,14 @@
                 const leftAnkleStart = start[27];
                 const rightAnkleStart = start[28];
 
-                // Determinar pierna
                 const isLeftKick = leftAnkle.y < rightAnkle.y;
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
                 const kickAnkleStart = isLeftKick ? leftAnkleStart : rightAnkleStart;
 
-                // Trayectoria INVERSA: pie va de afuera hacia adentro
                 const xMovement = kickAnkle.x - kickAnkleStart.x;
                 const isInwardTrajectory = isLeftKick ? xMovement > 0.1 : xMovement < -0.1;
-
-                // Altura
                 const shoulder = (current[11].y + current[12].y) / 2;
                 const isHighEnough = kickAnkle.y < shoulder;
-
-                // Movimiento total
                 const totalMovement = Math.abs(xMovement);
 
                 let confidence = 0;
@@ -588,10 +1353,6 @@
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
 
-            // ========================================================================
-            // UTILIDADES GEOMÉTRICAS
-            // ========================================================================
-            
             calculateVelocity(prev, curr) {
                 const dx = curr.x - prev.x;
                 const dy = curr.y - prev.y;
@@ -606,13 +1367,115 @@
                 return Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
 
-            calculateAngle(p1, p2, p3) {
-                const v1 = { x: p1.x - p2.x, y: p1.y - p2.y };
-                const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
-                const dot = v1.x * v2.x + v1.y * v2.y;
-                const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y);
-                const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y);
-                return Math.acos(dot / (mag1 * mag2)) * (180 / Math.PI);
+            // ========================================================================
+            // TABATA MODE
+            // ========================================================================
+            
+            startTabataMode() {
+                this.tabataState.currentRound = 0;
+                this.tabataState.isWorkPhase = false;
+                this.tabataState.isRestPhase = false;
+                
+                this.showTabataTimer('PREPARACIÓN', 3, false);
+                this.tabataState.countdown = 3;
+                
+                const prepInterval = setInterval(() => {
+                    this.tabataState.countdown--;
+                    this.updateTabataDisplay('PREPARACIÓN', this.tabataState.countdown, false);
+                    
+                    if (this.tabataState.countdown === 0) {
+                        clearInterval(prepInterval);
+                        this.startTabataRound();
+                    }
+                }, 1000);
+            }
+
+            startTabataRound() {
+                this.tabataState.currentRound++;
+                
+                if (this.tabataState.currentRound > this.tabataConfig.rounds) {
+                    this.endTabataSession();
+                    return;
+                }
+
+                this.tabataState.isWorkPhase = true;
+                this.tabataState.isRestPhase = false;
+                this.tabataState.countdown = this.tabataConfig.work;
+                
+                this.updateTabataDisplay('TRABAJO', this.tabataConfig.work, false);
+                this.hideTabataTimer();
+                
+                this.nextTechnique();
+                
+                const workInterval = setInterval(() => {
+                    this.tabataState.countdown--;
+                    
+                    if (this.tabataState.countdown === 0) {
+                        clearInterval(workInterval);
+                        this.startTabataRest();
+                    }
+                }, 1000);
+                
+                this.tabataState.intervalId = workInterval;
+            }
+
+            startTabataRest() {
+                this.tabataState.isWorkPhase = false;
+                this.tabataState.isRestPhase = true;
+                this.tabataState.countdown = this.tabataConfig.rest;
+                
+                this.state = 'cooldown';
+                this.showTabataTimer('DESCANSO', this.tabataConfig.rest, true);
+                
+                const restInterval = setInterval(() => {
+                    this.tabataState.countdown--;
+                    this.updateTabataDisplay('DESCANSO', this.tabataState.countdown, true);
+                    
+                    if (this.tabataState.countdown === 0) {
+                        clearInterval(restInterval);
+                        this.startTabataRound();
+                    }
+                }, 1000);
+                
+                this.tabataState.intervalId = restInterval;
+            }
+
+            showTabataTimer(phase, countdown, isRest) {
+                const timer = document.getElementById('tabataTimer');
+                timer.classList.add('active');
+                this.updateTabataDisplay(phase, countdown, isRest);
+            }
+
+            hideTabataTimer() {
+                document.getElementById('tabataTimer').classList.remove('active');
+            }
+
+            updateTabataDisplay(phase, countdown, isRest) {
+                const phaseEl = document.getElementById('tabataPhase');
+                const countdownEl = document.getElementById('tabataCountdown');
+                const roundEl = document.getElementById('tabataRound');
+                
+                phaseEl.textContent = phase;
+                countdownEl.textContent = countdown;
+                roundEl.textContent = `Ronda ${this.tabataState.currentRound} de ${this.tabataConfig.rounds}`;
+                
+                if (isRest) {
+                    phaseEl.classList.add('rest');
+                    countdownEl.classList.add('rest');
+                } else {
+                    phaseEl.classList.remove('rest');
+                    countdownEl.classList.remove('rest');
+                }
+            }
+
+            endTabataSession() {
+                this.showTabataTimer('¡COMPLETADO!', '✓', false);
+                this.updateStatus('Sesión Tabata completada. ¡Excelente trabajo!');
+                
+                setTimeout(() => {
+                    this.hideTabataTimer();
+                    this.showStatistics();
+                }, 3000);
             }
 
             // ========================================================================
@@ -623,13 +1486,46 @@
                 this.state = 'idle';
                 this.stats.techniqueCount = 0;
                 this.stats.reactionTimes = [];
+                this.stats.techniqueBreakdown = {};
+                this.stats.detailedReactionTimes = [];
+                this.sessionStartTime = Date.now();
                 this.updateStats();
-                this.nextTechnique();
+                
+                // Inicializar breakdown para cada técnica
+                this.availableTechniques.forEach(tech => {
+                    this.stats.techniqueBreakdown[tech.id] = {
+                        name: tech.name,
+                        count: 0,
+                        times: [],
+                        avgTime: 0,
+                        bestTime: Infinity
+                    };
+                });
+                
+                if (this.trainingMode === 'tabata') {
+                    this.startTabataMode();
+                } else {
+                    this.nextTechnique();
+                }
+            }
+
+            stopSession() {
+                this.state = 'idle';
+                if (this.tabataState.intervalId) {
+                    clearInterval(this.tabataState.intervalId);
+                }
+                this.hideTabataTimer();
+                this.synth.cancel();
+            }
+
+            finishSession() {
+                this.stopSession();
+                this.showStatistics();
             }
 
             nextTechnique() {
-                const randomIndex = Math.floor(Math.random() * TECHNIQUES.length);
-                this.currentTechnique = TECHNIQUES[randomIndex];
+                const randomIndex = Math.floor(Math.random() * this.availableTechniques.length);
+                this.currentTechnique = this.availableTechniques[randomIndex];
                 
                 this.frameBuffer = [];
                 
@@ -652,15 +1548,35 @@
                 document.getElementById('reactionTime').textContent = this.reactionTime.toFixed(3) + 's';
                 document.getElementById('technique').classList.add('detected');
                 
+                // Actualizar estadísticas generales
                 this.stats.techniqueCount++;
                 this.stats.reactionTimes.push(this.reactionTime);
-                this.updateStats();
                 
+                // Actualizar estadísticas por técnica
+                const techBreakdown = this.stats.techniqueBreakdown[this.currentTechnique.id];
+                techBreakdown.count++;
+                techBreakdown.times.push(this.reactionTime);
+                techBreakdown.avgTime = techBreakdown.times.reduce((a, b) => a + b, 0) / techBreakdown.times.length;
+                techBreakdown.bestTime = Math.min(techBreakdown.bestTime, this.reactionTime);
+                
+                // Guardar detalle con timestamp
+                this.stats.detailedReactionTimes.push({
+                    technique: this.currentTechnique.name,
+                    time: this.reactionTime,
+                    timestamp: Date.now()
+                });
+                
+                this.updateStats();
                 this.updateStatus('¡Técnica detectada!');
                 
                 setTimeout(() => {
                     document.getElementById('technique').classList.remove('detected');
-                    this.nextTechnique();
+                    
+                    if (this.trainingMode === 'normal') {
+                        this.nextTechnique();
+                    } else if (this.tabataState.isWorkPhase) {
+                        this.nextTechnique();
+                    }
                 }, CONFIG.NEXT_TECHNIQUE_DELAY);
             }
 
@@ -694,6 +1610,83 @@
                 
                 this.synth.speak(this.utterance);
             }
+
+            // ========================================================================
+            // ESTADÍSTICAS FINALES
+            // ========================================================================
+            
+            showStatistics() {
+                // Calcular duración de la sesión
+                const sessionDuration = Date.now() - this.sessionStartTime;
+                const minutes = Math.floor(sessionDuration / 60000);
+                const seconds = Math.floor((sessionDuration % 60000) / 1000);
+                
+                // Estadísticas generales
+                document.getElementById('final-total-techniques').textContent = this.stats.techniqueCount;
+                
+                if (this.stats.reactionTimes.length > 0) {
+                    const avg = this.stats.reactionTimes.reduce((a, b) => a + b, 0) / this.stats.reactionTimes.length;
+                    const best = Math.min(...this.stats.reactionTimes);
+                    
+                    document.getElementById('final-avg-time').textContent = avg.toFixed(3);
+                    document.getElementById('final-best-time').textContent = best.toFixed(3);
+                } else {
+                    document.getElementById('final-avg-time').textContent = '0.000';
+                    document.getElementById('final-best-time').textContent = '0.000';
+                }
+                
+                document.getElementById('final-duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Desglose por técnica
+                const breakdownContainer = document.getElementById('technique-breakdown');
+                breakdownContainer.innerHTML = '';
+                
+                Object.values(this.stats.techniqueBreakdown).forEach(tech => {
+                    if (tech.count > 0) {
+                        const row = document.createElement('div');
+                        row.className = 'technique-stat-row';
+                        
+                        row.innerHTML = `
+                            <div class="technique-stat-name">${tech.name}</div>
+                            <div class="technique-stat-details">
+                                <div class="technique-stat-item">
+                                    <div class="technique-stat-item-label">Repeticiones</div>
+                                    <div class="technique-stat-item-value">${tech.count}</div>
+                                </div>
+                                <div class="technique-stat-item">
+                                    <div class="technique-stat-item-label">Promedio</div>
+                                    <div class="technique-stat-item-value">${tech.avgTime.toFixed(3)}s</div>
+                                </div>
+                                <div class="technique-stat-item">
+                                    <div class="technique-stat-item-label">Mejor</div>
+                                    <div class="technique-stat-item-value">${tech.bestTime.toFixed(3)}s</div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        breakdownContainer.appendChild(row);
+                    }
+                });
+                
+                // Lista de tiempos de reacción
+                const reactionList = document.getElementById('reaction-times-list');
+                reactionList.innerHTML = '';
+                
+                this.stats.detailedReactionTimes.forEach((item, index) => {
+                    const itemEl = document.createElement('div');
+                    itemEl.className = 'reaction-time-item';
+                    
+                    itemEl.innerHTML = `
+                        <span class="reaction-time-technique">#${index + 1} - ${item.technique}</span>
+                        <span class="reaction-time-value">${item.time.toFixed(3)}s</span>
+                    `;
+                    
+                    reactionList.appendChild(itemEl);
+                });
+                
+                // Mostrar pantalla de estadísticas
+                document.getElementById('statisticsScreen').classList.add('active');
+            }
         }
 
         // ============================================================================
@@ -701,17 +1694,6 @@
         // ============================================================================
         
         let trainer = null;
-
-        document.getElementById('startButton').addEventListener('click', async () => {
-            document.getElementById('startButton').style.display = 'none';
-            
-            if (!trainer) {
-                trainer = new KumiteTrainer();
-                await trainer.startCamera();
-            }
-            
-            trainer.startSession();
-        });
 
         window.addEventListener('beforeunload', () => {
             if (trainer && trainer.synth) {

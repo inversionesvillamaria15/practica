@@ -917,7 +917,7 @@
             FRAME_BUFFER_SIZE: 15,
             DETECTION_COOLDOWN: 1000,
             NEXT_TECHNIQUE_DELAY: 2000,
-            TECHNIQUE_TIMEOUT: 8000, // 8 segundos para ejecutar la técnica
+            TECHNIQUE_TIMEOUT: 8000,
             MIN_DETECTION_CONFIDENCE: 0.65,
             VELOCITY_THRESHOLD: 0.10,
             ANGULAR_VELOCITY_THRESHOLD: 0.6,
@@ -1401,15 +1401,17 @@
                 this.showTabataTimer('PREPARACIÓN', 3, false);
                 this.tabataState.countdown = 3;
                 
-                const prepInterval = setInterval(() => {
-                    this.tabataState.countdown--;
-                    this.updateTabataDisplay('PREPARACIÓN', this.tabataState.countdown, false);
-                    
-                    if (this.tabataState.countdown === 0) {
-                        clearInterval(prepInterval);
-                        this.startTabataRound();
-                    }
-                }, 1000);
+                this.speak('Preparación', () => {
+                    const prepInterval = setInterval(() => {
+                        this.tabataState.countdown--;
+                        this.updateTabataDisplay('PREPARACIÓN', this.tabataState.countdown, false);
+                        
+                        if (this.tabataState.countdown === 0) {
+                            clearInterval(prepInterval);
+                            this.startTabataRound();
+                        }
+                    }, 1000);
+                });
             }
 
             startTabataRound() {
@@ -1429,7 +1431,6 @@
                 
                 this.nextTechnique();
                 
-                // Timer global del periodo de trabajo
                 const workInterval = setInterval(() => {
                     this.tabataState.countdown--;
                     
@@ -1447,7 +1448,6 @@
                 this.tabataState.isRestPhase = true;
                 this.tabataState.countdown = this.tabataConfig.rest;
                 
-                // Limpiar timeout de técnica si existe
                 if (this.techniqueTimeoutId) {
                     clearTimeout(this.techniqueTimeoutId);
                     this.techniqueTimeoutId = null;
@@ -1456,17 +1456,20 @@
                 this.state = 'cooldown';
                 this.showTabataTimer('DESCANSO', this.tabataConfig.rest, true);
                 
-                const restInterval = setInterval(() => {
-                    this.tabataState.countdown--;
-                    this.updateTabataDisplay('DESCANSO', this.tabataState.countdown, true);
+                // Anuncio por voz de descanso
+                this.speak('Descanso', () => {
+                    const restInterval = setInterval(() => {
+                        this.tabataState.countdown--;
+                        this.updateTabataDisplay('DESCANSO', this.tabataState.countdown, true);
+                        
+                        if (this.tabataState.countdown === 0) {
+                            clearInterval(restInterval);
+                            this.startTabataRound();
+                        }
+                    }, 1000);
                     
-                    if (this.tabataState.countdown === 0) {
-                        clearInterval(restInterval);
-                        this.startTabataRound();
-                    }
-                }, 1000);
-                
-                this.tabataState.intervalId = restInterval;
+                    this.tabataState.intervalId = restInterval;
+                });
             }
 
             showTabataTimer(phase, countdown, isRest) {
@@ -1501,10 +1504,13 @@
                 this.showTabataTimer('¡COMPLETADO!', '✓', false);
                 this.updateStatus('Sesión Tabata completada. ¡Excelente trabajo!');
                 
-                setTimeout(() => {
-                    this.hideTabataTimer();
-                    this.showStatistics();
-                }, 3000);
+                // Anuncio por voz de finalización
+                this.speak('Sesión completada. Excelente trabajo.', () => {
+                    setTimeout(() => {
+                        this.hideTabataTimer();
+                        this.showStatistics();
+                    }, 2000);
+                });
             }
 
             // ========================================================================
@@ -1556,7 +1562,11 @@
 
             finishSession() {
                 this.stopSession();
-                this.showStatistics();
+                
+                // Anuncio por voz de finalización manual
+                this.speak('Entrenamiento finalizado', () => {
+                    this.showStatistics();
+                });
             }
 
             nextTechnique() {
@@ -1573,7 +1583,6 @@
                     this.startTime = performance.now();
                     this.updateStatus('¡Ejecuta la técnica!');
                     
-                    // Timeout para técnica no ejecutada
                     this.techniqueTimeoutId = setTimeout(() => {
                         this.onTechniqueMissed();
                     }, CONFIG.TECHNIQUE_TIMEOUT);
@@ -1581,7 +1590,6 @@
             }
 
             onTechniqueDetected() {
-                // Limpiar timeout
                 if (this.techniqueTimeoutId) {
                     clearTimeout(this.techniqueTimeoutId);
                     this.techniqueTimeoutId = null;
@@ -1784,45 +1792,3 @@
     </script>
 </body>
 </html>
-```
-
-# ✅ Mejoras Implementadas:
-
-## 1. **Pantalla de Estadísticas Scrollable**
-- Ahora es **completamente scrollable** con scroll personalizado
-- Funciona tanto en móvil como en desktop
-- Scroll suave con estilo personalizado (verde neón)
-
-## 2. **Timeout de Técnicas (8 segundos)**
-- Si pasan **8 segundos** sin detectar la técnica → automáticamente pasa a la siguiente
-- Registra como "PERDIDA" en rojo
-- Cuenta en las estadísticas como técnica perdida
-
-## 3. **Modo Tabata Mejorado**
-- El **tiempo corre automáticamente** durante la fase de trabajo
-- No espera a que ejecutes la técnica para avanzar
-- Si se acaba el tiempo de la técnica (8s) → cambia automáticamente
-- Si completas la técnica → pasa inmediatamente a la siguiente
-- Las técnicas perdidas también cuentan en Tabata
-
-## 4. **Estadísticas con Técnicas Perdidas**
-- Nueva columna: **"Perdidas"** en rojo
-- En la lista detallada aparece **"PERDIDA"** en rojo
-- Desglose por técnica muestra ejecutadas vs perdidas
-
-## 5. **Visual Feedback Mejorado**
-- Cuando se pierde una técnica: muestra "PERDIDA" en rojo
-- Timer de reacción vuelve a naranja después
-- Estado claro: "Técnica no detectada - continúa!"
-
-## Ejemplo de Flujo Tabata:
-```
-1. Preparación: 3s
-2. Trabajo: 20s
-   - Técnica 1: 2.5s → DETECTADA ✓
-   - Técnica 2: 8s → PERDIDA ✗ (timeout)
-   - Técnica 3: 1.8s → DETECTADA ✓
-   - (etc... hasta completar 20s)
-3. Descanso: 10s
-4. Repetir 8 rondas
-5. Estadísticas completas

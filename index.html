@@ -33,6 +33,7 @@
             justify-content: center;
             align-items: center;
             z-index: 2000;
+            overflow-y: auto;
         }
 
         #dashboard.hidden {
@@ -47,6 +48,7 @@
             max-width: 600px;
             width: 90%;
             box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
+            margin: 20px;
         }
 
         .dashboard-title {
@@ -450,6 +452,8 @@
             width: 100%;
             box-shadow: 0 0 40px rgba(0, 255, 65, 0.3);
             animation: slideIn 0.5s ease-out;
+            max-height: 90vh;
+            overflow-y: auto;
         }
 
         @keyframes slideIn {
@@ -484,7 +488,7 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
@@ -552,12 +556,15 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         .technique-stat-name {
             font-size: 18px;
             font-weight: bold;
             color: #00ff41;
+            min-width: 200px;
         }
 
         .technique-stat-details {
@@ -588,7 +595,7 @@
             padding: 20px;
             border-radius: 10px;
             border: 1px solid rgba(0, 255, 65, 0.2);
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
         }
 
@@ -611,6 +618,10 @@
             color: #00ff41;
             font-weight: bold;
             font-family: 'Courier New', monospace;
+        }
+
+        .reaction-time-value.missed {
+            color: #ff4444;
         }
 
         .stats-actions {
@@ -655,21 +666,25 @@
         }
 
         /* Scrollbar styling */
-        .reaction-times-list::-webkit-scrollbar {
+        .reaction-times-list::-webkit-scrollbar,
+        .stats-container::-webkit-scrollbar {
             width: 8px;
         }
 
-        .reaction-times-list::-webkit-scrollbar-track {
+        .reaction-times-list::-webkit-scrollbar-track,
+        .stats-container::-webkit-scrollbar-track {
             background: rgba(0, 0, 0, 0.3);
             border-radius: 10px;
         }
 
-        .reaction-times-list::-webkit-scrollbar-thumb {
+        .reaction-times-list::-webkit-scrollbar-thumb,
+        .stats-container::-webkit-scrollbar-thumb {
             background: rgba(0, 255, 65, 0.5);
             border-radius: 10px;
         }
 
-        .reaction-times-list::-webkit-scrollbar-thumb:hover {
+        .reaction-times-list::-webkit-scrollbar-thumb:hover,
+        .stats-container::-webkit-scrollbar-thumb:hover {
             background: rgba(0, 255, 65, 0.7);
         }
 
@@ -695,9 +710,18 @@
                 grid-template-columns: 1fr;
             }
 
-            .technique-stat-details {
+            .technique-stat-row {
                 flex-direction: column;
-                gap: 10px;
+                align-items: flex-start;
+            }
+
+            .technique-stat-name {
+                min-width: auto;
+            }
+
+            .technique-stat-details {
+                width: 100%;
+                justify-content: space-between;
             }
 
             .stats-actions {
@@ -834,7 +858,6 @@
                 <div class="stats-subtitle">Análisis completo de tu entrenamiento</div>
             </div>
 
-            <!-- Estadísticas Generales -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-card-label">Técnicas Totales</div>
@@ -862,23 +885,18 @@
                 </div>
             </div>
 
-            <!-- Estadísticas por Técnica -->
             <div class="stats-section">
                 <div class="stats-section-title">📊 Desglose por Técnica</div>
                 <div class="technique-stats-grid" id="technique-breakdown">
-                    <!-- Se llenará dinámicamente -->
                 </div>
             </div>
 
-            <!-- Lista de Tiempos de Reacción -->
             <div class="stats-section">
                 <div class="stats-section-title">⏱️ Tiempos de Reacción</div>
                 <div class="reaction-times-list" id="reaction-times-list">
-                    <!-- Se llenará dinámicamente -->
                 </div>
             </div>
 
-            <!-- Acciones -->
             <div class="stats-actions">
                 <button class="stats-btn stats-btn-primary" id="newSessionBtn">
                     Nueva Sesión
@@ -899,6 +917,7 @@
             FRAME_BUFFER_SIZE: 15,
             DETECTION_COOLDOWN: 1000,
             NEXT_TECHNIQUE_DELAY: 2000,
+            TECHNIQUE_TIMEOUT: 8000, // 8 segundos para ejecutar la técnica
             MIN_DETECTION_CONFIDENCE: 0.65,
             VELOCITY_THRESHOLD: 0.10,
             ANGULAR_VELOCITY_THRESHOLD: 0.6,
@@ -1015,13 +1034,15 @@
                 this.startTime = null;
                 this.reactionTime = null;
                 this.sessionStartTime = null;
+                this.techniqueTimeoutId = null;
                 
                 this.tabataState = {
                     currentRound: 0,
                     isWorkPhase: false,
                     isRestPhase: false,
                     countdown: 0,
-                    intervalId: null
+                    intervalId: null,
+                    workIntervalId: null
                 };
                 
                 this.frameBuffer = [];
@@ -1029,9 +1050,10 @@
                 
                 this.stats = {
                     techniqueCount: 0,
+                    missedTechniques: 0,
                     reactionTimes: [],
                     techniqueBreakdown: {},
-                    detailedReactionTimes: [], // {technique, time, timestamp}
+                    detailedReactionTimes: [],
                     fps: 0,
                     lastFrameTime: performance.now()
                 };
@@ -1407,6 +1429,7 @@
                 
                 this.nextTechnique();
                 
+                // Timer global del periodo de trabajo
                 const workInterval = setInterval(() => {
                     this.tabataState.countdown--;
                     
@@ -1416,13 +1439,19 @@
                     }
                 }, 1000);
                 
-                this.tabataState.intervalId = workInterval;
+                this.tabataState.workIntervalId = workInterval;
             }
 
             startTabataRest() {
                 this.tabataState.isWorkPhase = false;
                 this.tabataState.isRestPhase = true;
                 this.tabataState.countdown = this.tabataConfig.rest;
+                
+                // Limpiar timeout de técnica si existe
+                if (this.techniqueTimeoutId) {
+                    clearTimeout(this.techniqueTimeoutId);
+                    this.techniqueTimeoutId = null;
+                }
                 
                 this.state = 'cooldown';
                 this.showTabataTimer('DESCANSO', this.tabataConfig.rest, true);
@@ -1485,17 +1514,18 @@
             startSession() {
                 this.state = 'idle';
                 this.stats.techniqueCount = 0;
+                this.stats.missedTechniques = 0;
                 this.stats.reactionTimes = [];
                 this.stats.techniqueBreakdown = {};
                 this.stats.detailedReactionTimes = [];
                 this.sessionStartTime = Date.now();
                 this.updateStats();
                 
-                // Inicializar breakdown para cada técnica
                 this.availableTechniques.forEach(tech => {
                     this.stats.techniqueBreakdown[tech.id] = {
                         name: tech.name,
                         count: 0,
+                        missed: 0,
                         times: [],
                         avgTime: 0,
                         bestTime: Infinity
@@ -1513,6 +1543,12 @@
                 this.state = 'idle';
                 if (this.tabataState.intervalId) {
                     clearInterval(this.tabataState.intervalId);
+                }
+                if (this.tabataState.workIntervalId) {
+                    clearInterval(this.tabataState.workIntervalId);
+                }
+                if (this.techniqueTimeoutId) {
+                    clearTimeout(this.techniqueTimeoutId);
                 }
                 this.hideTabataTimer();
                 this.synth.cancel();
@@ -1536,10 +1572,21 @@
                     this.state = 'waiting';
                     this.startTime = performance.now();
                     this.updateStatus('¡Ejecuta la técnica!');
+                    
+                    // Timeout para técnica no ejecutada
+                    this.techniqueTimeoutId = setTimeout(() => {
+                        this.onTechniqueMissed();
+                    }, CONFIG.TECHNIQUE_TIMEOUT);
                 });
             }
 
             onTechniqueDetected() {
+                // Limpiar timeout
+                if (this.techniqueTimeoutId) {
+                    clearTimeout(this.techniqueTimeoutId);
+                    this.techniqueTimeoutId = null;
+                }
+                
                 this.state = 'cooldown';
                 this.lastDetectionTime = performance.now();
                 
@@ -1548,22 +1595,20 @@
                 document.getElementById('reactionTime').textContent = this.reactionTime.toFixed(3) + 's';
                 document.getElementById('technique').classList.add('detected');
                 
-                // Actualizar estadísticas generales
                 this.stats.techniqueCount++;
                 this.stats.reactionTimes.push(this.reactionTime);
                 
-                // Actualizar estadísticas por técnica
                 const techBreakdown = this.stats.techniqueBreakdown[this.currentTechnique.id];
                 techBreakdown.count++;
                 techBreakdown.times.push(this.reactionTime);
                 techBreakdown.avgTime = techBreakdown.times.reduce((a, b) => a + b, 0) / techBreakdown.times.length;
                 techBreakdown.bestTime = Math.min(techBreakdown.bestTime, this.reactionTime);
                 
-                // Guardar detalle con timestamp
                 this.stats.detailedReactionTimes.push({
                     technique: this.currentTechnique.name,
                     time: this.reactionTime,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    missed: false
                 });
                 
                 this.updateStats();
@@ -1571,6 +1616,37 @@
                 
                 setTimeout(() => {
                     document.getElementById('technique').classList.remove('detected');
+                    
+                    if (this.trainingMode === 'normal') {
+                        this.nextTechnique();
+                    } else if (this.tabataState.isWorkPhase) {
+                        this.nextTechnique();
+                    }
+                }, CONFIG.NEXT_TECHNIQUE_DELAY);
+            }
+
+            onTechniqueMissed() {
+                if (this.state !== 'waiting') return;
+                
+                this.state = 'cooldown';
+                this.stats.missedTechniques++;
+                
+                const techBreakdown = this.stats.techniqueBreakdown[this.currentTechnique.id];
+                techBreakdown.missed++;
+                
+                this.stats.detailedReactionTimes.push({
+                    technique: this.currentTechnique.name,
+                    time: null,
+                    timestamp: Date.now(),
+                    missed: true
+                });
+                
+                document.getElementById('reactionTime').textContent = 'PERDIDA';
+                document.getElementById('reactionTime').style.color = '#ff4444';
+                this.updateStatus('Técnica no detectada - continúa!');
+                
+                setTimeout(() => {
+                    document.getElementById('reactionTime').style.color = '#ffaa00';
                     
                     if (this.trainingMode === 'normal') {
                         this.nextTechnique();
@@ -1616,12 +1692,10 @@
             // ========================================================================
             
             showStatistics() {
-                // Calcular duración de la sesión
                 const sessionDuration = Date.now() - this.sessionStartTime;
                 const minutes = Math.floor(sessionDuration / 60000);
                 const seconds = Math.floor((sessionDuration % 60000) / 1000);
                 
-                // Estadísticas generales
                 document.getElementById('final-total-techniques').textContent = this.stats.techniqueCount;
                 
                 if (this.stats.reactionTimes.length > 0) {
@@ -1637,29 +1711,35 @@
                 
                 document.getElementById('final-duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
-                // Desglose por técnica
                 const breakdownContainer = document.getElementById('technique-breakdown');
                 breakdownContainer.innerHTML = '';
                 
                 Object.values(this.stats.techniqueBreakdown).forEach(tech => {
-                    if (tech.count > 0) {
+                    if (tech.count > 0 || tech.missed > 0) {
                         const row = document.createElement('div');
                         row.className = 'technique-stat-row';
+                        
+                        const avgTime = tech.times.length > 0 ? tech.avgTime.toFixed(3) : '-';
+                        const bestTime = tech.bestTime !== Infinity ? tech.bestTime.toFixed(3) : '-';
                         
                         row.innerHTML = `
                             <div class="technique-stat-name">${tech.name}</div>
                             <div class="technique-stat-details">
                                 <div class="technique-stat-item">
-                                    <div class="technique-stat-item-label">Repeticiones</div>
+                                    <div class="technique-stat-item-label">Ejecutadas</div>
                                     <div class="technique-stat-item-value">${tech.count}</div>
                                 </div>
                                 <div class="technique-stat-item">
+                                    <div class="technique-stat-item-label">Perdidas</div>
+                                    <div class="technique-stat-item-value" style="color: #ff4444;">${tech.missed}</div>
+                                </div>
+                                <div class="technique-stat-item">
                                     <div class="technique-stat-item-label">Promedio</div>
-                                    <div class="technique-stat-item-value">${tech.avgTime.toFixed(3)}s</div>
+                                    <div class="technique-stat-item-value">${avgTime}s</div>
                                 </div>
                                 <div class="technique-stat-item">
                                     <div class="technique-stat-item-label">Mejor</div>
-                                    <div class="technique-stat-item-value">${tech.bestTime.toFixed(3)}s</div>
+                                    <div class="technique-stat-item-value">${bestTime}s</div>
                                 </div>
                             </div>
                         `;
@@ -1668,7 +1748,6 @@
                     }
                 });
                 
-                // Lista de tiempos de reacción
                 const reactionList = document.getElementById('reaction-times-list');
                 reactionList.innerHTML = '';
                 
@@ -1676,15 +1755,17 @@
                     const itemEl = document.createElement('div');
                     itemEl.className = 'reaction-time-item';
                     
+                    const timeDisplay = item.missed ? 'PERDIDA' : `${item.time.toFixed(3)}s`;
+                    const valueClass = item.missed ? 'reaction-time-value missed' : 'reaction-time-value';
+                    
                     itemEl.innerHTML = `
                         <span class="reaction-time-technique">#${index + 1} - ${item.technique}</span>
-                        <span class="reaction-time-value">${item.time.toFixed(3)}s</span>
+                        <span class="${valueClass}">${timeDisplay}</span>
                     `;
                     
                     reactionList.appendChild(itemEl);
                 });
                 
-                // Mostrar pantalla de estadísticas
                 document.getElementById('statisticsScreen').classList.add('active');
             }
         }
@@ -1703,3 +1784,45 @@
     </script>
 </body>
 </html>
+```
+
+# ✅ Mejoras Implementadas:
+
+## 1. **Pantalla de Estadísticas Scrollable**
+- Ahora es **completamente scrollable** con scroll personalizado
+- Funciona tanto en móvil como en desktop
+- Scroll suave con estilo personalizado (verde neón)
+
+## 2. **Timeout de Técnicas (8 segundos)**
+- Si pasan **8 segundos** sin detectar la técnica → automáticamente pasa a la siguiente
+- Registra como "PERDIDA" en rojo
+- Cuenta en las estadísticas como técnica perdida
+
+## 3. **Modo Tabata Mejorado**
+- El **tiempo corre automáticamente** durante la fase de trabajo
+- No espera a que ejecutes la técnica para avanzar
+- Si se acaba el tiempo de la técnica (8s) → cambia automáticamente
+- Si completas la técnica → pasa inmediatamente a la siguiente
+- Las técnicas perdidas también cuentan en Tabata
+
+## 4. **Estadísticas con Técnicas Perdidas**
+- Nueva columna: **"Perdidas"** en rojo
+- En la lista detallada aparece **"PERDIDA"** en rojo
+- Desglose por técnica muestra ejecutadas vs perdidas
+
+## 5. **Visual Feedback Mejorado**
+- Cuando se pierde una técnica: muestra "PERDIDA" en rojo
+- Timer de reacción vuelve a naranja después
+- Estado claro: "Técnica no detectada - continúa!"
+
+## Ejemplo de Flujo Tabata:
+```
+1. Preparación: 3s
+2. Trabajo: 20s
+   - Técnica 1: 2.5s → DETECTADA ✓
+   - Técnica 2: 8s → PERDIDA ✗ (timeout)
+   - Técnica 3: 1.8s → DETECTADA ✓
+   - (etc... hasta completar 20s)
+3. Descanso: 10s
+4. Repetir 8 rondas
+5. Estadísticas completas

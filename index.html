@@ -327,6 +327,13 @@
             color: #888;
         }
 
+        #debugInfo {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #666;
+            font-family: 'Courier New', monospace;
+        }
+
         /* Tabata Timer */
         #tabataTimer {
             display: none;
@@ -799,6 +806,7 @@
             <div id="repCounter">0</div>
             <div id="workTimer">0s</div>
             <div id="status">Iniciando...</div>
+            <div id="debugInfo"></div>
         </div>
 
         <div id="tabataTimer">
@@ -876,21 +884,31 @@
 
     <script>
         // ============================================================================
-        // CONFIGURACIÓN Y CONSTANTES
+        // CONFIGURACIÓN Y CONSTANTES - UMBRALES MÁS ESTRICTOS
         // ============================================================================
         
         const CONFIG = {
             FRAME_BUFFER_SIZE: 15,
-            DETECTION_COOLDOWN: 500, // Cooldown muy corto para repeticiones rápidas
-            MIN_DETECTION_CONFIDENCE: 0.65,
-            VELOCITY_THRESHOLD: 0.10,
-            ANGULAR_VELOCITY_THRESHOLD: 0.6,
-            MIN_POSE_CONFIDENCE: 0.5,
-            KICK_HEIGHT_JODAN: 0.4,
-            KICK_HEIGHT_CHUDAN_MIN: 0.15,
-            KICK_HEIGHT_CHUDAN_MAX: 0.5,
-            LATERAL_MOVEMENT_MIN: 0.12,
-            DEBUG_MODE: false
+            DETECTION_COOLDOWN: 700, // Cooldown para evitar doble detección
+            MIN_DETECTION_CONFIDENCE: 0.80, // MÁS ESTRICTO (antes 0.65)
+            
+            // GYAKU TSUKI - Umbrales más altos
+            PUNCH_VELOCITY_THRESHOLD: 0.18, // MÁS ALTO (antes 0.10)
+            PUNCH_EXTENSION_MIN: 0.35, // MÁS LARGO (antes 0.25)
+            PUNCH_FORWARD_MOVEMENT: 0.08, // MÁS MOVIMIENTO (antes 0.05)
+            
+            // PATADAS - Umbrales más estrictos
+            KICK_HEIGHT_JODAN: 0.50, // MÁS ALTO (antes 0.4)
+            KICK_HEIGHT_CHUDAN_MIN: 0.20, // MÁS ALTO (antes 0.15)
+            KICK_HEIGHT_CHUDAN_MAX: 0.55, // Ajustado
+            LATERAL_MOVEMENT_MIN: 0.18, // MÁS MOVIMIENTO (antes 0.12)
+            KNEE_ELEVATION_MIN: 0.15, // Nuevo: rodilla debe elevarse
+            
+            // URA MAWASHI
+            URA_INWARD_MOVEMENT: 0.15, // MÁS MOVIMIENTO (antes 0.1)
+            URA_TOTAL_MOVEMENT: 0.20, // MÁS MOVIMIENTO (antes 0.15)
+            
+            DEBUG_MODE: true // Activar para ver valores en pantalla
         };
 
         const ALL_TECHNIQUES = [
@@ -997,7 +1015,6 @@
                 this.currentTechnique = null;
                 this.sessionStartTime = null;
                 
-                // Tabata state
                 this.tabataState = {
                     currentRound: 0,
                     currentRoundReps: 0,
@@ -1007,7 +1024,7 @@
                     workStartTime: 0,
                     intervalId: null,
                     workIntervalId: null,
-                    roundStats: [] // {technique, reps, duration}
+                    roundStats: []
                 };
                 
                 this.frameBuffer = [];
@@ -1095,7 +1112,6 @@
                 this.stats.lastFrameTime = now;
                 document.getElementById('fps').textContent = this.stats.fps;
 
-                // Actualizar timer de trabajo si estamos en fase de trabajo
                 if (this.tabataState.isWorkPhase) {
                     const elapsed = Math.floor((now - this.tabataState.workStartTime) / 1000);
                     document.getElementById('workTimer').textContent = `${elapsed}s`;
@@ -1166,10 +1182,13 @@
                 }
             }
 
+            // ========================================================================
+            // DETECCIÓN DE TÉCNICAS - VERSIÓN MÁS ESTRICTA
+            // ========================================================================
+            
             detectTechnique() {
                 const now = performance.now();
                 
-                // Cooldown muy corto para permitir repeticiones rápidas
                 if (now - this.lastDetectionTime < CONFIG.DETECTION_COOLDOWN) {
                     return;
                 }
@@ -1194,7 +1213,11 @@
                 }
 
                 if (CONFIG.DEBUG_MODE && this.state === 'waiting') {
-                    console.log(`[${this.currentTechnique.id}] Confidence: ${confidence.toFixed(3)}`, debugInfo);
+                    const debugText = `Conf: ${(confidence * 100).toFixed(0)}% | ` +
+                                     Object.entries(debugInfo).map(([k, v]) => 
+                                         `${k}: ${typeof v === 'number' ? v.toFixed(2) : v}`
+                                     ).join(' | ');
+                    document.getElementById('debugInfo').textContent = debugText;
                 }
 
                 if (detected && confidence > CONFIG.MIN_DETECTION_CONFIDENCE) {
@@ -1210,24 +1233,45 @@
                 const rightShoulder = current[12];
                 const leftWrist = current[15];
                 const rightWrist = current[16];
+                const leftElbow = current[13];
+                const rightElbow = current[14];
 
+                // Determinar brazo trasero
                 const isLeftBack = leftShoulder.z > rightShoulder.z;
                 const backWrist = isLeftBack ? leftWrist : rightWrist;
                 const backWristPrev = isLeftBack ? previous[15] : previous[16];
+                const backShoulder = isLeftBack ? leftShoulder : rightShoulder;
+                const backElbow = isLeftBack ? leftElbow : rightElbow;
 
+                // 1. Velocidad del puño (más estricto)
                 const wristVelocity = this.calculateVelocity(backWristPrev, backWrist);
-                const extension = this.calculateDistance(
-                    isLeftBack ? leftShoulder : rightShoulder,
-                    backWrist
-                );
+                
+                // 2. Extensión completa del brazo
+                const extension = this.calculateDistance(backShoulder, backWrist);
+                
+                // 3. El codo debe estar casi extendido
+                const elbowExtension = this.calculateDistance(backElbow, backWrist);
+                
+                // 4. Movimiento hacia adelante (profundidad Z)
                 const forwardMovement = Math.abs(backWrist.z - backWristPrev.z);
 
-                let confidence = 0;
-                let debugInfo = { wristVelocity, extension, forwardMovement };
+                // 5. El puño debe estar adelante del cuerpo
+                const isPunchForward = backWrist.z < backShoulder.z;
 
-                if (wristVelocity > CONFIG.VELOCITY_THRESHOLD) confidence += 0.35;
-                if (extension > 0.25) confidence += 0.35;
-                if (forwardMovement > 0.05) confidence += 0.30;
+                let confidence = 0;
+                let debugInfo = { 
+                    vel: wristVelocity, 
+                    ext: extension, 
+                    fwd: forwardMovement,
+                    elbExt: elbowExtension
+                };
+
+                // Scoring MÁS ESTRICTO
+                if (wristVelocity > CONFIG.PUNCH_VELOCITY_THRESHOLD) confidence += 0.30;
+                if (extension > CONFIG.PUNCH_EXTENSION_MIN) confidence += 0.25;
+                if (forwardMovement > CONFIG.PUNCH_FORWARD_MOVEMENT) confidence += 0.25;
+                if (isPunchForward) confidence += 0.10;
+                if (elbowExtension > 0.20) confidence += 0.10; // Brazo extendido
 
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
@@ -1253,17 +1297,32 @@
                 const hipAvg = (leftHip.y + rightHip.y) / 2;
                 const bodyHeight = hipAvg - nose.y;
 
+                // 1. Altura MUY ALTA (cerca de la cabeza)
                 const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
                 const isHighEnough = kickHeight > CONFIG.KICK_HEIGHT_JODAN;
+
+                // 2. Movimiento lateral SIGNIFICATIVO
                 const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
-                const kneeElevated = kickKnee.y < kickHip.y - 0.1;
+
+                // 3. Rodilla DEBE estar elevada
+                const kneeHeight = (kickHip.y - kickKnee.y) / bodyHeight;
+                const kneeElevated = kneeHeight > CONFIG.KNEE_ELEVATION_MIN;
+
+                // 4. Pierna debe estar extendida en el pico
+                const legExtension = this.calculateDistance(kickKnee, kickAnkle);
 
                 let confidence = 0;
-                let debugInfo = { kickHeight, lateralMovement, kneeElevated, isHighEnough };
+                let debugInfo = { 
+                    kHeight: kickHeight, 
+                    lat: lateralMovement, 
+                    knee: kneeHeight,
+                    legExt: legExtension
+                };
 
                 if (isHighEnough) confidence += 0.40;
                 if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
-                if (kneeElevated) confidence += 0.30;
+                if (kneeElevated) confidence += 0.20;
+                if (legExtension > 0.25) confidence += 0.10;
 
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
@@ -1291,24 +1350,36 @@
                 const hipAvg = (leftHip.y + rightHip.y) / 2;
                 const bodyHeight = hipAvg - shoulder;
 
+                // 1. Altura MEDIA estricta
                 const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
                 const isCorrectHeight = kickHeight >= CONFIG.KICK_HEIGHT_CHUDAN_MIN && 
                                        kickHeight <= CONFIG.KICK_HEIGHT_CHUDAN_MAX;
+
+                // 2. Movimiento lateral SIGNIFICATIVO
                 const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
+
+                // 3. Rodilla elevada apropiadamente (no tanto como Jodan)
                 const kneeHeight = (kickHip.y - kickKnee.y) / bodyHeight;
-                const kneeElevated = kneeHeight > 0.15 && kneeHeight < 0.5;
-                const circularPath = Math.abs(kickAnkleMid.x - kickAnkleStart.x) > 0.08;
+                const kneeElevated = kneeHeight > CONFIG.KNEE_ELEVATION_MIN;
+
+                // 4. Trayectoria circular clara
+                const circularPath = Math.abs(kickAnkleMid.x - kickAnkleStart.x) > 0.12;
+
+                // 5. Extensión de pierna
+                const legExtension = this.calculateDistance(kickKnee, kickAnkle);
 
                 let confidence = 0;
                 let debugInfo = { 
-                    kickHeight, lateralMovement, kneeHeight, kneeElevated, 
-                    circularPath, isCorrectHeight
+                    kHeight: kickHeight, 
+                    lat: lateralMovement, 
+                    knee: kneeHeight,
+                    circ: circularPath
                 };
 
                 if (isCorrectHeight) confidence += 0.35;
-                if (lateralMovement > 0.10) confidence += 0.25;
+                if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
                 if (kneeElevated) confidence += 0.20;
-                if (circularPath) confidence += 0.20;
+                if (circularPath) confidence += 0.15;
 
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
@@ -1326,18 +1397,29 @@
                 const kickAnkle = isLeftKick ? leftAnkle : rightAnkle;
                 const kickAnkleStart = isLeftKick ? leftAnkleStart : rightAnkleStart;
 
+                // Trayectoria INVERSA clara
                 const xMovement = kickAnkle.x - kickAnkleStart.x;
-                const isInwardTrajectory = isLeftKick ? xMovement > 0.1 : xMovement < -0.1;
+                const isInwardTrajectory = isLeftKick ? 
+                    xMovement > CONFIG.URA_INWARD_MOVEMENT : 
+                    xMovement < -CONFIG.URA_INWARD_MOVEMENT;
+
+                // Altura suficiente
                 const shoulder = (current[11].y + current[12].y) / 2;
                 const isHighEnough = kickAnkle.y < shoulder;
+
+                // Movimiento total significativo
                 const totalMovement = Math.abs(xMovement);
 
                 let confidence = 0;
-                let debugInfo = { xMovement, isInwardTrajectory, isHighEnough, totalMovement };
+                let debugInfo = { 
+                    xMov: xMovement, 
+                    inward: isInwardTrajectory, 
+                    total: totalMovement 
+                };
 
-                if (isInwardTrajectory) confidence += 0.40;
+                if (isInwardTrajectory) confidence += 0.45;
                 if (isHighEnough) confidence += 0.30;
-                if (totalMovement > 0.15) confidence += 0.30;
+                if (totalMovement > CONFIG.URA_TOTAL_MOVEMENT) confidence += 0.25;
 
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
@@ -1357,7 +1439,7 @@
             }
 
             // ========================================================================
-            // TABATA MODE
+            // TABATA MODE (sin cambios)
             // ========================================================================
             
             startTabataMode() {
@@ -1388,7 +1470,6 @@
                     return;
                 }
 
-                // Seleccionar técnica aleatoria para esta ronda
                 const randomIndex = Math.floor(Math.random() * this.availableTechniques.length);
                 this.currentTechnique = this.availableTechniques[randomIndex];
                 
@@ -1400,7 +1481,6 @@
                 
                 this.hideTabataTimer();
                 
-                // Mostrar técnica y contador
                 document.getElementById('technique').textContent = this.currentTechnique.name;
                 document.getElementById('repCounter').textContent = '0';
                 document.getElementById('workTimer').textContent = '0s';
@@ -1410,7 +1490,6 @@
                     this.updateStatus('¡Haz todas las repeticiones que puedas!');
                 });
                 
-                // Timer global del periodo de trabajo
                 const workInterval = setInterval(() => {
                     this.tabataState.countdown--;
                     
@@ -1426,7 +1505,6 @@
             endWorkPhase() {
                 this.state = 'cooldown';
                 
-                // Guardar estadísticas de la ronda
                 this.tabataState.roundStats.push({
                     technique: this.currentTechnique.name,
                     techniqueId: this.currentTechnique.id,
@@ -1434,7 +1512,6 @@
                     duration: this.tabataConfig.work
                 });
                 
-                // Actualizar breakdown por técnica
                 if (!this.stats.techniqueBreakdown[this.currentTechnique.id]) {
                     this.stats.techniqueBreakdown[this.currentTechnique.id] = {
                         name: this.currentTechnique.name,
@@ -1553,7 +1630,6 @@
             }
 
             nextTechnique() {
-                // Modo normal: técnicas aleatorias continuas
                 const randomIndex = Math.floor(Math.random() * this.availableTechniques.length);
                 this.currentTechnique = this.availableTechniques[randomIndex];
                 
@@ -1569,29 +1645,24 @@
             onTechniqueDetected() {
                 this.lastDetectionTime = performance.now();
                 
-                // Incrementar contadores
                 this.stats.totalTechniques++;
                 
                 if (this.trainingMode === 'tabata' && this.tabataState.isWorkPhase) {
                     this.tabataState.currentRoundReps++;
                     document.getElementById('repCounter').textContent = this.tabataState.currentRoundReps;
                     
-                    // Animación de feedback
                     document.getElementById('repCounter').classList.add('detected');
                     setTimeout(() => {
                         document.getElementById('repCounter').classList.remove('detected');
                     }, 300);
                 } else {
-                    // Modo normal: pasar a siguiente técnica
                     setTimeout(() => {
                         this.nextTechnique();
                     }, 1000);
                 }
                 
-                // Actualizar estadísticas generales
                 document.getElementById('techniqueCount').textContent = this.stats.totalTechniques;
                 
-                // Calcular reps por minuto promedio
                 if (this.trainingMode === 'tabata' && this.tabataState.roundStats.length > 0) {
                     const totalReps = this.tabataState.roundStats.reduce((sum, r) => sum + r.reps, 0);
                     const totalMinutes = (this.tabataState.currentRound * (this.tabataConfig.work + this.tabataConfig.rest)) / 60;
@@ -1619,16 +1690,11 @@
                 this.synth.speak(this.utterance);
             }
 
-            // ========================================================================
-            // ESTADÍSTICAS FINALES
-            // ========================================================================
-            
             showStatistics() {
                 const sessionDuration = Date.now() - this.sessionStartTime;
                 const minutes = Math.floor(sessionDuration / 60000);
                 const seconds = Math.floor((sessionDuration % 60000) / 1000);
                 
-                // Calcular estadísticas
                 const totalReps = this.tabataState.roundStats.reduce((sum, r) => sum + r.reps, 0);
                 const avgRPM = sessionDuration > 0 ? Math.round((totalReps / sessionDuration) * 60000) : 0;
                 const bestRound = this.tabataState.roundStats.reduce((max, r) => Math.max(max, r.reps), 0);
@@ -1638,7 +1704,6 @@
                 document.getElementById('final-best-round').textContent = bestRound;
                 document.getElementById('final-duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
                 
-                // Desglose por técnica
                 const breakdownContainer = document.getElementById('technique-breakdown');
                 breakdownContainer.innerHTML = '';
                 
@@ -1680,10 +1745,6 @@
             }
         }
 
-        // ============================================================================
-        // INICIALIZACIÓN
-        // ============================================================================
-        
         let trainer = null;
 
         window.addEventListener('beforeunload', () => {
@@ -1694,53 +1755,3 @@
     </script>
 </body>
 </html>
-```
-
-# 🥊 Cambios Principales - Modo Tabata de Repeticiones:
-
-## 1. **Sin Cooldown entre Técnicas**
-- Cooldown reducido a **500ms** (antes 1000ms)
-- Permite hacer repeticiones rápidas de la misma técnica
-- No hay timeout que te fuerce a cambiar
-
-## 2. **Mismo Técnica Durante Todo el Periodo**
-- Cada ronda = **UNA técnica aleatoria**
-- Ejemplo Ronda 1: 20s de Gyaku Tsuki → cuántos puedes hacer
-- Ronda 2: 20s de Mawashi Geri Jodan → repetir
-- Y así sucesivamente
-
-## 3. **Contador de Repeticiones en Tiempo Real**
-```
-┌─────────────────────┐
-│  GYAKU TSUKI       │
-│      15            │ ← Contador grande
-│      12s           │ ← Tiempo transcurrido
-└─────────────────────┘
-```
-
-## 4. **Nuevas Métricas**
-- **Total Reps**: Repeticiones totales en la sesión
-- **Reps/Min Promedio**: Velocidad promedio
-- **Mejor Ronda**: Máximo número de reps en una ronda
-- **Promedio/Ronda**: Por técnica
-
-## 5. **Estadísticas por Técnica**
-```
-Gyaku Tsuki:
-- Total Reps: 45
-- Promedio/Ronda: 15.0
-- Mejor Ronda: 18
-- Reps/Min: 45
-```
-
-## Flujo Tabata Mejorado:
-```
-1. Preparación: 3s
-2. Ronda 1: "Gyaku Tsuki"
-   → 0... 1... 2... 15! (en 20s)
-3. Descanso: 10s
-4. Ronda 2: "Mawashi Geri Jodan"
-   → 0... 1... 2... 8! (en 20s)
-5. Repetir 8 rondas
-6. "Sesión completada"
-7. Estadísticas

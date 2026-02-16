@@ -880,23 +880,19 @@
     </div>
 
     <script>
-        // ============================================================================
-        // GYAKU TSUKI ULTRA ESTRICTO
-        // ============================================================================
-        
         const CONFIG = {
             FRAME_BUFFER_SIZE: 15,
-            DETECTION_COOLDOWN: 800,
-            MIN_DETECTION_CONFIDENCE: 0.85, // MUY ALTO
+            DETECTION_COOLDOWN: 900, // Más tiempo entre detecciones
+            MIN_DETECTION_CONFIDENCE: 0.85,
             
-            // GYAKU TSUKI - EXTREMADAMENTE ESTRICTO
-            PUNCH_VELOCITY_MIN: 0.25, // DEBE SER MUY RÁPIDO
-            PUNCH_EXTENSION_MIN: 0.40, // BRAZO MUY EXTENDIDO
-            PUNCH_FORWARD_Z_MIN: 0.12, // MUCHO MOVIMIENTO HACIA ADELANTE
-            PUNCH_STRAIGHTNESS: 0.85, // BRAZO CASI RECTO (nuevo)
-            PUNCH_HEIGHT_VALID: true, // PUÑO A ALTURA CORRECTA (nuevo)
+            // GYAKU TSUKI - CON HIKITE Y RESET
+            PUNCH_VELOCITY_MIN: 0.25,
+            PUNCH_EXTENSION_MIN: 0.40,
+            PUNCH_FORWARD_Z_MIN: 0.12,
+            PUNCH_STRAIGHTNESS: 0.85,
+            HIKITE_RETRACTION: 0.08, // NUEVO: Brazo opuesto debe retraerse
+            RESET_TO_GUARD: true, // NUEVO: Requiere volver a guardia
             
-            // PATADAS
             KICK_HEIGHT_JODAN: 0.50,
             KICK_HEIGHT_CHUDAN_MIN: 0.20,
             KICK_HEIGHT_CHUDAN_MAX: 0.55,
@@ -1000,6 +996,12 @@
                 this.currentTechnique = null;
                 this.sessionStartTime = null;
                 
+                // NUEVO: Estado de posición para detectar reset
+                this.lastPunchState = {
+                    wasExtended: false,
+                    lastCheckTime: 0
+                };
+                
                 this.tabataState = {
                     currentRound: 0,
                     currentRoundReps: 0,
@@ -1056,11 +1058,7 @@
             async startCamera() {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 },
-                            facingMode: 'user'
-                        }
+                        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
                     });
 
                     this.video.srcObject = stream;
@@ -1074,9 +1072,7 @@
                     });
 
                     this.camera = new Camera(this.video, {
-                        onFrame: async () => {
-                            await this.pose.send({ image: this.video });
-                        },
+                        onFrame: async () => { await this.pose.send({ image: this.video }); },
                         width: 1280,
                         height: 720
                     });
@@ -1157,20 +1153,12 @@
             }
 
             addFrameToBuffer(landmarks) {
-                this.frameBuffer.push({
-                    timestamp: performance.now(),
-                    landmarks: landmarks
-                });
-
+                this.frameBuffer.push({ timestamp: performance.now(), landmarks: landmarks });
                 if (this.frameBuffer.length > CONFIG.FRAME_BUFFER_SIZE) {
                     this.frameBuffer.shift();
                 }
             }
 
-            // ========================================================================
-            // GYAKU TSUKI ULTRA ESTRICTO - 7 VALIDACIONES
-            // ========================================================================
-            
             detectTechnique() {
                 const now = performance.now();
                 
@@ -1199,7 +1187,7 @@
 
                 if (CONFIG.DEBUG_MODE && this.state === 'waiting') {
                     const debugLines = [
-                        `CONF: ${(confidence * 100).toFixed(0)}% (necesita ${(CONFIG.MIN_DETECTION_CONFIDENCE * 100)}%)`,
+                        `CONF: ${(confidence * 100).toFixed(0)}% (min ${(CONFIG.MIN_DETECTION_CONFIDENCE * 100)}%)`,
                         ...Object.entries(debugInfo).map(([k, v]) => {
                             if (typeof v === 'boolean') {
                                 return `${k}: ${v ? '✓' : '✗'}`;
@@ -1215,6 +1203,10 @@
                 }
             }
 
+            // ========================================================================
+            // GYAKU TSUKI CON HIKITE Y RESET A GUARDIA
+            // ========================================================================
+            
             detectGyakuTsuki() {
                 const current = this.frameBuffer[this.frameBuffer.length - 1].landmarks;
                 const previous = this.frameBuffer[0].landmarks;
@@ -1227,12 +1219,16 @@
                 const rightElbow = current[14];
                 const nose = current[0];
 
-                // Determinar brazo trasero por profundidad Z
                 const isLeftBack = leftShoulder.z > rightShoulder.z;
                 const backWrist = isLeftBack ? leftWrist : rightWrist;
                 const backWristPrev = isLeftBack ? previous[15] : previous[16];
                 const backShoulder = isLeftBack ? leftShoulder : rightShoulder;
                 const backElbow = isLeftBack ? leftElbow : rightElbow;
+                
+                // BRAZO OPUESTO (para hikite)
+                const frontWrist = isLeftBack ? rightWrist : leftWrist;
+                const frontWristPrev = isLeftBack ? previous[16] : previous[15];
+                const frontShoulder = isLeftBack ? rightShoulder : leftShoulder;
 
                 // ===============================================
                 // VALIDACIÓN 1: VELOCIDAD EXPLOSIVA
@@ -1241,19 +1237,19 @@
                 const hasExplosiveSpeed = wristVelocity > CONFIG.PUNCH_VELOCITY_MIN;
 
                 // ===============================================
-                // VALIDACIÓN 2: EXTENSIÓN COMPLETA DEL BRAZO
+                // VALIDACIÓN 2: EXTENSIÓN COMPLETA
                 // ===============================================
                 const armLength = this.calculateDistance(backShoulder, backWrist);
                 const hasFullExtension = armLength > CONFIG.PUNCH_EXTENSION_MIN;
 
                 // ===============================================
-                // VALIDACIÓN 3: BRAZO CASI RECTO (hombro-codo-muñeca alineados)
+                // VALIDACIÓN 3: BRAZO RECTO
                 // ===============================================
                 const armStraightness = this.calculateArmStraightness(backShoulder, backElbow, backWrist);
                 const isStraight = armStraightness > CONFIG.PUNCH_STRAIGHTNESS;
 
                 // ===============================================
-                // VALIDACIÓN 4: MOVIMIENTO HACIA ADELANTE (profundidad Z)
+                // VALIDACIÓN 4: MOVIMIENTO HACIA ADELANTE
                 // ===============================================
                 const forwardZ = backWrist.z - backWristPrev.z;
                 const hasForwardMovement = Math.abs(forwardZ) > CONFIG.PUNCH_FORWARD_Z_MIN && forwardZ < 0;
@@ -1264,19 +1260,56 @@
                 const isPunchForward = backWrist.z < backShoulder.z - 0.05;
 
                 // ===============================================
-                // VALIDACIÓN 6: ALTURA CORRECTA (nivel pecho/cara, no abajo)
+                // VALIDACIÓN 6: ALTURA CORRECTA
                 // ===============================================
                 const punchHeight = Math.abs(backWrist.y - nose.y);
-                const isCorrectHeight = punchHeight < 0.25; // Puño cerca de la altura de la cara
+                const isCorrectHeight = punchHeight < 0.25;
 
                 // ===============================================
-                // VALIDACIÓN 7: MOVIMIENTO HORIZONTAL MÍNIMO (no un swing lateral)
+                // VALIDACIÓN 7: MOVIMIENTO LINEAL
                 // ===============================================
                 const lateralMovement = Math.abs(backWrist.x - backWristPrev.x);
-                const isLinear = lateralMovement < 0.10; // Poco movimiento lateral
+                const isLinear = lateralMovement < 0.10;
 
                 // ===============================================
-                // SCORING - TODAS LAS VALIDACIONES DEBEN PASAR
+                // VALIDACIÓN 8: HIKITE (brazo opuesto retrae)
+                // ===============================================
+                const hikiteMovement = frontWrist.z - frontWristPrev.z;
+                const hasHikite = hikiteMovement > CONFIG.HIKITE_RETRACTION;
+
+                // ===============================================
+                // VALIDACIÓN 9: RESET A GUARDIA (brazo volvió)
+                // ===============================================
+                const now = performance.now();
+                let hasReset = false;
+                
+                // Si el brazo está extendido ahora, marcarlo
+                if (hasFullExtension && isPunchForward) {
+                    this.lastPunchState.wasExtended = true;
+                    this.lastPunchState.lastCheckTime = now;
+                }
+                
+                // Si antes estaba extendido y ahora NO, significa que volvió
+                if (this.lastPunchState.wasExtended) {
+                    const isRetracted = armLength < 0.30; // Brazo recogido
+                    if (isRetracted) {
+                        hasReset = true;
+                        this.lastPunchState.wasExtended = false;
+                    }
+                    
+                    // Reset automático después de 2 segundos
+                    if (now - this.lastPunchState.lastCheckTime > 2000) {
+                        this.lastPunchState.wasExtended = false;
+                    }
+                }
+                
+                // Si no hay golpe previo, considerar reset OK
+                if (!this.lastPunchState.wasExtended) {
+                    hasReset = true;
+                }
+
+                // ===============================================
+                // SCORING
                 // ===============================================
                 let confidence = 0;
                 let debugInfo = {
@@ -1286,24 +1319,25 @@
                     '4.fwdZ': forwardZ.toFixed(3) + (hasForwardMovement ? '✓' : '✗'),
                     '5.ahead': isPunchForward ? '✓' : '✗',
                     '6.height': punchHeight.toFixed(3) + (isCorrectHeight ? '✓' : '✗'),
-                    '7.linear': lateralMovement.toFixed(3) + (isLinear ? '✓' : '✗')
+                    '7.linear': lateralMovement.toFixed(3) + (isLinear ? '✓' : '✗'),
+                    '8.hikite': hikiteMovement.toFixed(3) + (hasHikite ? '✓' : '✗'),
+                    '9.reset': hasReset ? '✓' : '✗ ESPERA'
                 };
 
-                // Cada validación vale puntos
-                if (hasExplosiveSpeed) confidence += 0.20;      // 20%
-                if (hasFullExtension) confidence += 0.15;       // 15%
-                if (isStraight) confidence += 0.15;             // 15%
-                if (hasForwardMovement) confidence += 0.20;     // 20%
-                if (isPunchForward) confidence += 0.10;         // 10%
-                if (isCorrectHeight) confidence += 0.10;        // 10%
-                if (isLinear) confidence += 0.10;               // 10%
+                if (hasExplosiveSpeed) confidence += 0.15;
+                if (hasFullExtension) confidence += 0.15;
+                if (isStraight) confidence += 0.12;
+                if (hasForwardMovement) confidence += 0.15;
+                if (isPunchForward) confidence += 0.08;
+                if (isCorrectHeight) confidence += 0.08;
+                if (isLinear) confidence += 0.08;
+                if (hasHikite) confidence += 0.09;
+                if (hasReset) confidence += 0.10; // CRÍTICO: Sin reset no cuenta
 
                 return [confidence > CONFIG.MIN_DETECTION_CONFIDENCE, confidence, debugInfo];
             }
 
-            // Función helper para calcular qué tan recto está el brazo
             calculateArmStraightness(shoulder, elbow, wrist) {
-                // Vectores: hombro->codo y codo->muñeca
                 const v1 = {
                     x: elbow.x - shoulder.x,
                     y: elbow.y - shoulder.y,
@@ -1315,14 +1349,11 @@
                     z: wrist.z - elbow.z
                 };
 
-                // Producto punto normalizado (1 = perfectamente alineado)
                 const dot = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
                 const mag1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
                 const mag2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
                 
                 if (mag1 === 0 || mag2 === 0) return 0;
-                
-                // Normalizar entre 0-1
                 return (dot / (mag1 * mag2) + 1) / 2;
             }
 
@@ -1355,12 +1386,7 @@
                 const legExtension = this.calculateDistance(kickKnee, kickAnkle);
 
                 let confidence = 0;
-                let debugInfo = { 
-                    kHeight: kickHeight, 
-                    lat: lateralMovement, 
-                    knee: kneeHeight,
-                    legExt: legExtension
-                };
+                let debugInfo = { kHeight: kickHeight, lat: lateralMovement, knee: kneeHeight, legExt: legExtension };
 
                 if (isHighEnough) confidence += 0.40;
                 if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
@@ -1394,20 +1420,14 @@
                 const bodyHeight = hipAvg - shoulder;
 
                 const kickHeight = (hipAvg - kickAnkle.y) / bodyHeight;
-                const isCorrectHeight = kickHeight >= CONFIG.KICK_HEIGHT_CHUDAN_MIN && 
-                                       kickHeight <= CONFIG.KICK_HEIGHT_CHUDAN_MAX;
+                const isCorrectHeight = kickHeight >= CONFIG.KICK_HEIGHT_CHUDAN_MIN && kickHeight <= CONFIG.KICK_HEIGHT_CHUDAN_MAX;
                 const lateralMovement = Math.abs(kickAnkle.x - kickAnkleStart.x);
                 const kneeHeight = (kickHip.y - kickKnee.y) / bodyHeight;
                 const kneeElevated = kneeHeight > CONFIG.KNEE_ELEVATION_MIN;
                 const circularPath = Math.abs(kickAnkleMid.x - kickAnkleStart.x) > 0.12;
 
                 let confidence = 0;
-                let debugInfo = { 
-                    kHeight: kickHeight, 
-                    lat: lateralMovement, 
-                    knee: kneeHeight,
-                    circ: circularPath
-                };
+                let debugInfo = { kHeight: kickHeight, lat: lateralMovement, knee: kneeHeight, circ: circularPath };
 
                 if (isCorrectHeight) confidence += 0.35;
                 if (lateralMovement > CONFIG.LATERAL_MOVEMENT_MIN) confidence += 0.30;
@@ -1431,20 +1451,13 @@
                 const kickAnkleStart = isLeftKick ? leftAnkleStart : rightAnkleStart;
 
                 const xMovement = kickAnkle.x - kickAnkleStart.x;
-                const isInwardTrajectory = isLeftKick ? 
-                    xMovement > CONFIG.URA_INWARD_MOVEMENT : 
-                    xMovement < -CONFIG.URA_INWARD_MOVEMENT;
-
+                const isInwardTrajectory = isLeftKick ? xMovement > CONFIG.URA_INWARD_MOVEMENT : xMovement < -CONFIG.URA_INWARD_MOVEMENT;
                 const shoulder = (current[11].y + current[12].y) / 2;
                 const isHighEnough = kickAnkle.y < shoulder;
                 const totalMovement = Math.abs(xMovement);
 
                 let confidence = 0;
-                let debugInfo = { 
-                    xMov: xMovement, 
-                    inward: isInwardTrajectory, 
-                    total: totalMovement 
-                };
+                let debugInfo = { xMov: xMovement, inward: isInwardTrajectory, total: totalMovement };
 
                 if (isInwardTrajectory) confidence += 0.45;
                 if (isHighEnough) confidence += 0.30;
@@ -1467,21 +1480,18 @@
                 return Math.sqrt(dx * dx + dy * dy + dz * dz);
             }
 
-            // [El resto del código de Tabata, sesión, estadísticas, etc. permanece igual...]
-            // Por brevedad, omito el código que no cambió
+            // [El resto del código permanece igual - Tabata, sesiones, estadísticas...]
+            // Por brevedad omito las partes que no cambiaron
 
             startTabataMode() {
                 this.tabataState.currentRound = 0;
                 this.tabataState.roundStats = [];
-                
                 this.showTabataTimer('PREPARACIÓN', 3, false);
                 this.tabataState.countdown = 3;
-                
                 this.speak('Preparación', () => {
                     const prepInterval = setInterval(() => {
                         this.tabataState.countdown--;
                         this.updateTabataDisplay('PREPARACIÓN', this.tabataState.countdown, false);
-                        
                         if (this.tabataState.countdown === 0) {
                             clearInterval(prepInterval);
                             this.startTabataRound();
@@ -1492,54 +1502,43 @@
 
             startTabataRound() {
                 this.tabataState.currentRound++;
-                
                 if (this.tabataState.currentRound > this.tabataConfig.rounds) {
                     this.endTabataSession();
                     return;
                 }
-
                 const randomIndex = Math.floor(Math.random() * this.availableTechniques.length);
                 this.currentTechnique = this.availableTechniques[randomIndex];
-                
                 this.tabataState.currentRoundReps = 0;
                 this.tabataState.isWorkPhase = true;
                 this.tabataState.isRestPhase = false;
                 this.tabataState.countdown = this.tabataConfig.work;
                 this.tabataState.workStartTime = performance.now();
-                
                 this.hideTabataTimer();
-                
                 document.getElementById('technique').textContent = this.currentTechnique.name;
                 document.getElementById('repCounter').textContent = '0';
                 document.getElementById('workTimer').textContent = '0s';
-                
                 this.speak(this.currentTechnique.voice, () => {
                     this.state = 'waiting';
                     this.updateStatus('¡Haz todas las repeticiones que puedas!');
                 });
-                
                 const workInterval = setInterval(() => {
                     this.tabataState.countdown--;
-                    
                     if (this.tabataState.countdown === 0) {
                         clearInterval(workInterval);
                         this.endWorkPhase();
                     }
                 }, 1000);
-                
                 this.tabataState.workIntervalId = workInterval;
             }
 
             endWorkPhase() {
                 this.state = 'cooldown';
-                
                 this.tabataState.roundStats.push({
                     technique: this.currentTechnique.name,
                     techniqueId: this.currentTechnique.id,
                     reps: this.tabataState.currentRoundReps,
                     duration: this.tabataConfig.work
                 });
-                
                 if (!this.stats.techniqueBreakdown[this.currentTechnique.id]) {
                     this.stats.techniqueBreakdown[this.currentTechnique.id] = {
                         name: this.currentTechnique.name,
@@ -1549,13 +1548,11 @@
                         bestRound: 0
                     };
                 }
-                
                 const breakdown = this.stats.techniqueBreakdown[this.currentTechnique.id];
                 breakdown.totalReps += this.tabataState.currentRoundReps;
                 breakdown.rounds.push(this.tabataState.currentRoundReps);
                 breakdown.avgRepsPerRound = breakdown.totalReps / breakdown.rounds.length;
                 breakdown.bestRound = Math.max(breakdown.bestRound, this.tabataState.currentRoundReps);
-                
                 this.startTabataRest();
             }
 
@@ -1563,20 +1560,16 @@
                 this.tabataState.isWorkPhase = false;
                 this.tabataState.isRestPhase = true;
                 this.tabataState.countdown = this.tabataConfig.rest;
-                
                 this.showTabataTimer('DESCANSO', this.tabataConfig.rest, true);
-                
                 this.speak('Descanso', () => {
                     const restInterval = setInterval(() => {
                         this.tabataState.countdown--;
                         this.updateTabataDisplay('DESCANSO', this.tabataState.countdown, true);
-                        
                         if (this.tabataState.countdown === 0) {
                             clearInterval(restInterval);
                             this.startTabataRound();
                         }
                     }, 1000);
-                    
                     this.tabataState.intervalId = restInterval;
                 });
             }
@@ -1595,11 +1588,9 @@
                 const phaseEl = document.getElementById('tabataPhase');
                 const countdownEl = document.getElementById('tabataCountdown');
                 const roundEl = document.getElementById('tabataRound');
-                
                 phaseEl.textContent = phase;
                 countdownEl.textContent = countdown;
                 roundEl.textContent = `Ronda ${this.tabataState.currentRound} de ${this.tabataConfig.rounds}`;
-                
                 if (isRest) {
                     phaseEl.classList.add('rest');
                     countdownEl.classList.add('rest');
@@ -1612,7 +1603,6 @@
             endTabataSession() {
                 this.showTabataTimer('¡COMPLETADO!', '✓', false);
                 this.updateStatus('Sesión Tabata completada. ¡Excelente trabajo!');
-                
                 this.speak('Sesión completada. Excelente trabajo.', () => {
                     setTimeout(() => {
                         this.hideTabataTimer();
@@ -1626,7 +1616,7 @@
                 this.stats.totalTechniques = 0;
                 this.stats.techniqueBreakdown = {};
                 this.sessionStartTime = Date.now();
-                
+                this.lastPunchState = { wasExtended: false, lastCheckTime: 0 };
                 if (this.trainingMode === 'tabata') {
                     this.startTabataMode();
                 } else {
@@ -1636,30 +1626,22 @@
 
             stopSession() {
                 this.state = 'idle';
-                if (this.tabataState.intervalId) {
-                    clearInterval(this.tabataState.intervalId);
-                }
-                if (this.tabataState.workIntervalId) {
-                    clearInterval(this.tabataState.workIntervalId);
-                }
+                if (this.tabataState.intervalId) clearInterval(this.tabataState.intervalId);
+                if (this.tabataState.workIntervalId) clearInterval(this.tabataState.workIntervalId);
                 this.hideTabataTimer();
                 this.synth.cancel();
             }
 
             finishSession() {
                 this.stopSession();
-                this.speak('Entrenamiento finalizado', () => {
-                    this.showStatistics();
-                });
+                this.speak('Entrenamiento finalizado', () => { this.showStatistics(); });
             }
 
             nextTechnique() {
                 const randomIndex = Math.floor(Math.random() * this.availableTechniques.length);
                 this.currentTechnique = this.availableTechniques[randomIndex];
-                
                 this.frameBuffer = [];
                 document.getElementById('technique').textContent = this.currentTechnique.name;
-                
                 this.speak(this.currentTechnique.voice, () => {
                     this.state = 'waiting';
                     this.updateStatus('¡Ejecuta la técnica!');
@@ -1668,25 +1650,16 @@
 
             onTechniqueDetected() {
                 this.lastDetectionTime = performance.now();
-                
                 this.stats.totalTechniques++;
-                
                 if (this.trainingMode === 'tabata' && this.tabataState.isWorkPhase) {
                     this.tabataState.currentRoundReps++;
                     document.getElementById('repCounter').textContent = this.tabataState.currentRoundReps;
-                    
                     document.getElementById('repCounter').classList.add('detected');
-                    setTimeout(() => {
-                        document.getElementById('repCounter').classList.remove('detected');
-                    }, 300);
+                    setTimeout(() => { document.getElementById('repCounter').classList.remove('detected'); }, 300);
                 } else {
-                    setTimeout(() => {
-                        this.nextTechnique();
-                    }, 1000);
+                    setTimeout(() => { this.nextTechnique(); }, 1000);
                 }
-                
                 document.getElementById('techniqueCount').textContent = this.stats.totalTechniques;
-                
                 if (this.trainingMode === 'tabata' && this.tabataState.roundStats.length > 0) {
                     const totalReps = this.tabataState.roundStats.reduce((sum, r) => sum + r.reps, 0) + this.tabataState.currentRoundReps;
                     const totalMinutes = (this.tabataState.currentRound * (this.tabataConfig.work + this.tabataConfig.rest)) / 60;
@@ -1701,16 +1674,11 @@
 
             speak(text, callback) {
                 this.synth.cancel();
-                
                 this.utterance = new SpeechSynthesisUtterance(text);
                 this.utterance.lang = 'es-ES';
                 this.utterance.rate = 1.0;
                 this.utterance.pitch = 1.0;
-                
-                if (callback) {
-                    this.utterance.onend = callback;
-                }
-                
+                if (callback) this.utterance.onend = callback;
                 this.synth.speak(this.utterance);
             }
 
@@ -1718,27 +1686,20 @@
                 const sessionDuration = Date.now() - this.sessionStartTime;
                 const minutes = Math.floor(sessionDuration / 60000);
                 const seconds = Math.floor((sessionDuration % 60000) / 1000);
-                
                 const totalReps = this.tabataState.roundStats.reduce((sum, r) => sum + r.reps, 0);
                 const avgRPM = sessionDuration > 0 ? Math.round((totalReps / sessionDuration) * 60000) : 0;
                 const bestRound = this.tabataState.roundStats.reduce((max, r) => Math.max(max, r.reps), 0);
-                
                 document.getElementById('final-total-techniques').textContent = totalReps;
                 document.getElementById('final-avg-rpm').textContent = avgRPM;
                 document.getElementById('final-best-round').textContent = bestRound;
                 document.getElementById('final-duration').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                
                 const breakdownContainer = document.getElementById('technique-breakdown');
                 breakdownContainer.innerHTML = '';
-                
                 Object.values(this.stats.techniqueBreakdown).forEach(tech => {
                     if (tech.totalReps > 0) {
                         const row = document.createElement('div');
                         row.className = 'technique-stat-row';
-                        
-                        const rpm = tech.rounds.length > 0 ? 
-                            Math.round((tech.totalReps / (tech.rounds.length * this.tabataConfig.work)) * 60) : 0;
-                        
+                        const rpm = tech.rounds.length > 0 ? Math.round((tech.totalReps / (tech.rounds.length * this.tabataConfig.work)) * 60) : 0;
                         row.innerHTML = `
                             <div class="technique-stat-name">${tech.name}</div>
                             <div class="technique-stat-details">
@@ -1760,48 +1721,41 @@
                                 </div>
                             </div>
                         `;
-                        
                         breakdownContainer.appendChild(row);
                     }
                 });
-                
                 document.getElementById('statisticsScreen').classList.add('active');
             }
         }
 
         let trainer = null;
-
         window.addEventListener('beforeunload', () => {
-            if (trainer && trainer.synth) {
-                trainer.synth.cancel();
-            }
+            if (trainer && trainer.synth) trainer.synth.cancel();
         });
     </script>
 </body>
 </html>
 ```
 
-# 🎯 Cambios Críticos - Gyaku Tsuki ULTRA Estricto:
+# 🥋 Nuevas Validaciones Finales:
 
-## **7 Validaciones Obligatorias:**
+## **Validación 8: HIKITE (Brazo Opuesto)**
+- El brazo que NO golpea debe **retraerse** hacia atrás
+- Mide movimiento en profundidad Z del brazo frontal
+- `> 0.08` de retracción
 
-1. **Velocidad Explosiva**: `> 0.25` (muy rápido)
-2. **Extensión Completa**: `> 0.40` (brazo muy extendido)
-3. **Brazo Recto**: `> 0.85` (casi 180° de alineación)
-4. **Movimiento Hacia Adelante**: `> 0.12` en profundidad Z
-5. **Puño Adelante del Cuerpo**: Must be true
-6. **Altura Correcta**: Puño a nivel cara/pecho
-7. **Movimiento Lineal**: `< 0.10` (sin swing lateral)
+## **Validación 9: RESET A GUARDIA**
+- **Crítico**: Debes volver el brazo a posición de guardia entre golpes
+- Si mantienes el brazo extendido, NO cuenta el siguiente golpe
+- Estado: `✗ ESPERA` → indica que debes retraer primero
+- **Auto-reset** después de 2 segundos si te quedas quieto
 
-## **DEBUG Mejorado:**
+## **Cooldown Aumentado**
+- Ahora `900ms` entre detecciones
+- Da tiempo físico para retraer y volver a golpear
 
-Ahora ves **EXACTAMENTE** qué falla:
+## Debug Mejorado:
 ```
-CONF: 72% (necesita 85%)
-1.vel: 0.198✗ ← FALLA AQUÍ
-2.ext: 0.410✓
-3.straight: 0.890✓
-4.fwdZ: -0.130✓
-5.ahead: ✓
-6.height: 0.180✓
-7.linear: 0.065✓
+CONF: 78% (min 85%)
+8.hikite: 0.092✓
+9.reset: ✗ ESPERA ← AQUÍ ESTÁ EL PROBLEMA
